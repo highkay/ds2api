@@ -166,6 +166,15 @@ func (s *Store) RuntimeGlobalMaxInflight(defaultSize int) int {
 	return defaultSize
 }
 
+func (s *Store) RuntimeTokenRefreshIntervalHours() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.TokenRefreshIntervalHours > 0 {
+		return s.cfg.Runtime.TokenRefreshIntervalHours
+	}
+	return 6
+}
+
 func (s *Store) AutoDeleteSessions() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -150,6 +150,9 @@ func (h *Handler) configImport(w http.ResponseWriter, r *http.Request) {
 			if incoming.Runtime.GlobalMaxInflight > 0 {
 				next.Runtime.GlobalMaxInflight = incoming.Runtime.GlobalMaxInflight
 			}
+			if incoming.Runtime.TokenRefreshIntervalHours > 0 {
+				next.Runtime.TokenRefreshIntervalHours = incoming.Runtime.TokenRefreshIntervalHours
+			}
 		}
 
 		normalizeSettingsConfig(&next)

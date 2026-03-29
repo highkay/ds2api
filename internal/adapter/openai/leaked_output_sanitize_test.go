@@ -33,3 +33,11 @@ func TestSanitizeLeakedOutputRemovesAgentXMLLeaks(t *testing.T) {
 		t.Fatalf("unexpected sanitize result for agent XML leak: %q", got)
 	}
 }
+
+func TestSanitizeLeakedOutputPreservesStandaloneResultTags(t *testing.T) {
+	raw := "Example XML: <result>value</result>"
+	got := sanitizeLeakedOutput(raw)
+	if got != raw {
+		t.Fatalf("unexpected sanitize result for standalone result tag: %q", got)
+	}
+}

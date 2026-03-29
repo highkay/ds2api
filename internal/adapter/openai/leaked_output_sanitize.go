@@ -13,9 +13,17 @@ var leakedToolResultBlobPattern = regexp.MustCompile(`(?is)<\s*\|\s*tool\s*\|\s*
 //   - U+2581 variant:   <｜end▁of▁sentence｜>  (used in some DeepSeek outputs)
 var leakedMetaMarkerPattern = regexp.MustCompile(`(?i)<[｜\|]\s*(?:assistant|tool|end[_▁]of[_▁]sentence|end[_▁]of[_▁]thinking)\s*[｜\|]>`)
 
-// leakedAgentXMLPattern catches agent-style XML tags that leak through when
-// the sieve fails to capture them (e.g. incomplete blocks at stream end).
-var leakedAgentXMLPattern = regexp.MustCompile(`(?is)</?(?:attempt_completion|ask_followup_question|new_task|result)>`)
+// leakedAgentXMLBlockPatterns catch agent-style XML blocks that leak through
+// when the sieve fails to capture them. These are applied only to complete
+// wrapper blocks so standalone "<result>" examples in normal output remain
+// untouched.
+var leakedAgentXMLBlockPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?is)<attempt_completion\b[^>]*>(.*?)</attempt_completion>`),
+	regexp.MustCompile(`(?is)<ask_followup_question\b[^>]*>(.*?)</ask_followup_question>`),
+	regexp.MustCompile(`(?is)<new_task\b[^>]*>(.*?)</new_task>`),
+}
+
+var leakedAgentResultTagPattern = regexp.MustCompile(`(?is)</?result>`)
 
 func sanitizeLeakedOutput(text string) string {
 	if text == "" {
@@ -25,6 +33,22 @@ func sanitizeLeakedOutput(text string) string {
 	out = leakedToolCallArrayPattern.ReplaceAllString(out, "")
 	out = leakedToolResultBlobPattern.ReplaceAllString(out, "")
 	out = leakedMetaMarkerPattern.ReplaceAllString(out, "")
-	out = leakedAgentXMLPattern.ReplaceAllString(out, "")
+	out = sanitizeLeakedAgentXMLBlocks(out)
+	return out
+}
+
+func sanitizeLeakedAgentXMLBlocks(text string) string {
+	out := text
+	for _, pattern := range leakedAgentXMLBlockPatterns {
+		out = pattern.ReplaceAllStringFunc(out, func(match string) string {
+			submatches := pattern.FindStringSubmatch(match)
+			if len(submatches) < 2 {
+				return match
+			}
+			// Preserve the inner text so leaked agent instructions do not erase
+			// the actual answer, but strip the wrapper/result markup itself.
+			return leakedAgentResultTagPattern.ReplaceAllString(submatches[1], "")
+		})
+	}
 	return out
 }

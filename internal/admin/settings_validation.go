@@ -57,6 +57,9 @@ func validateRuntimeSettings(runtime config.RuntimeConfig) error {
 	if runtime.GlobalMaxInflight != 0 && (runtime.GlobalMaxInflight < 1 || runtime.GlobalMaxInflight > 200000) {
 		return fmt.Errorf("runtime.global_max_inflight must be between 1 and 200000")
 	}
+	if runtime.TokenRefreshIntervalHours != 0 && (runtime.TokenRefreshIntervalHours < 1 || runtime.TokenRefreshIntervalHours > 720) {
+		return fmt.Errorf("runtime.token_refresh_interval_hours must be between 1 and 720")
+	}
 	if runtime.AccountMaxInflight > 0 && runtime.GlobalMaxInflight > 0 && runtime.GlobalMaxInflight < runtime.AccountMaxInflight {
 		return fmt.Errorf("runtime.global_max_inflight must be >= runtime.account_max_inflight")
 	}

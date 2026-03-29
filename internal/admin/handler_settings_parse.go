@@ -23,14 +23,14 @@ func boolFrom(v any) bool {
 
 func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *config.RuntimeConfig, *config.ToolcallConfig, *config.ResponsesConfig, *config.EmbeddingsConfig, *config.AutoDeleteConfig, map[string]string, map[string]string, error) {
 	var (
-		adminCfg       *config.AdminConfig
-		runtimeCfg     *config.RuntimeConfig
-		toolcallCfg    *config.ToolcallConfig
-		respCfg        *config.ResponsesConfig
-		embCfg         *config.EmbeddingsConfig
-		autoDeleteCfg  *config.AutoDeleteConfig
-		claudeMap      map[string]string
-		aliasMap       map[string]string
+		adminCfg      *config.AdminConfig
+		runtimeCfg    *config.RuntimeConfig
+		toolcallCfg   *config.ToolcallConfig
+		respCfg       *config.ResponsesConfig
+		embCfg        *config.EmbeddingsConfig
+		autoDeleteCfg *config.AutoDeleteConfig
+		claudeMap     map[string]string
+		aliasMap      map[string]string
 	)
 
 	if raw, ok := req["admin"].(map[string]any); ok {
@@ -67,6 +67,13 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 				return nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("runtime.global_max_inflight must be between 1 and 200000")
 			}
 			cfg.GlobalMaxInflight = n
+		}
+		if v, exists := raw["token_refresh_interval_hours"]; exists {
+			n := intFrom(v)
+			if n < 1 || n > 720 {
+				return nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("runtime.token_refresh_interval_hours must be between 1 and 720")
+			}
+			cfg.TokenRefreshIntervalHours = n
 		}
 		if cfg.AccountMaxInflight > 0 && cfg.GlobalMaxInflight > 0 && cfg.GlobalMaxInflight < cfg.AccountMaxInflight {
 			return nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("runtime.global_max_inflight must be >= runtime.account_max_inflight")
