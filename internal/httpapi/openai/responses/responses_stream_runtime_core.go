@@ -133,7 +133,7 @@ func (s *responsesStreamRuntime) finalize() {
 		s.processToolStreamEvents(toolstream.Flush(&s.sieve, s.toolNames), true, true)
 	}
 
-	textParsed := toolcall.ParseStandaloneToolCallsDetailed(finalText, s.toolNames)
+	textParsed := toolcall.ParseAssistantToolCallsDetailed(finalText, finalThinking, s.toolNames)
 	detected := textParsed.Calls
 	s.logToolPolicyRejections(textParsed)
 

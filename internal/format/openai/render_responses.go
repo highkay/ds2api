@@ -12,7 +12,7 @@ import (
 func BuildResponseObject(responseID, model, finalPrompt, finalThinking, finalText string, toolNames []string) map[string]any {
 	// Strict mode: only standalone, structured tool-call payloads are treated
 	// as executable tool calls.
-	detected := toolcall.ParseStandaloneToolCallsDetailed(finalText, toolNames)
+	detected := toolcall.ParseAssistantToolCallsDetailed(finalText, finalThinking, toolNames)
 	exposedOutputText := finalText
 	output := make([]any, 0, 2)
 	if len(detected.Calls) > 0 {

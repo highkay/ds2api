@@ -32,6 +32,21 @@ func ParseStandaloneToolCallsDetailed(text string, availableToolNames []string) 
 	return parseToolCallsDetailedXMLOnly(text)
 }
 
+func ParseAssistantToolCallsDetailed(text, thinking string, availableToolNames []string) ToolCallParseResult {
+	textParsed := ParseStandaloneToolCallsDetailed(text, availableToolNames)
+	if len(textParsed.Calls) > 0 {
+		return textParsed
+	}
+	if strings.TrimSpace(text) != "" {
+		return textParsed
+	}
+	thinkingParsed := ParseStandaloneToolCallsDetailed(thinking, availableToolNames)
+	if len(thinkingParsed.Calls) > 0 {
+		return thinkingParsed
+	}
+	return textParsed
+}
+
 func parseToolCallsDetailedXMLOnly(text string) ToolCallParseResult {
 	result := ToolCallParseResult{}
 	trimmed := strings.TrimSpace(text)
@@ -74,7 +89,7 @@ func filterToolCallsDetailed(parsed []ParsedToolCall) ([]ParsedToolCall, []strin
 
 func looksLikeToolCallSyntax(text string) bool {
 	lower := strings.ToLower(text)
-	return strings.Contains(lower, "<tool_calls")
+	return strings.Contains(lower, "<|dsml|tool_calls") || strings.Contains(lower, "<tool_calls")
 }
 
 func stripFencedCodeBlocks(text string) string {

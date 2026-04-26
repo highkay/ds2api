@@ -133,7 +133,7 @@ func (s *chatStreamRuntime) finalize(finishReason string) {
 	finalText := cleanVisibleOutput(s.text.String(), s.stripReferenceMarkers)
 	s.finalThinking = finalThinking
 	s.finalText = finalText
-	detected := toolcall.ParseStandaloneToolCallsDetailed(finalText, s.toolNames)
+	detected := toolcall.ParseAssistantToolCallsDetailed(finalText, finalThinking, s.toolNames)
 	if len(detected.Calls) > 0 && !s.toolCallsDoneEmitted {
 		finishReason = "tool_calls"
 		delta := map[string]any{
