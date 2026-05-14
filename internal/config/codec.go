@@ -32,7 +32,7 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if strings.TrimSpace(c.Admin.PasswordHash) != "" || c.Admin.JWTExpireHours > 0 || c.Admin.JWTValidAfterUnix > 0 {
 		m["admin"] = c.Admin
 	}
-	if c.Runtime.AccountMaxInflight > 0 || c.Runtime.AccountMaxQueue > 0 || c.Runtime.GlobalMaxInflight > 0 || c.Runtime.TokenRefreshIntervalHours > 0 {
+	if runtimeConfigPresent(c.Runtime) {
 		m["runtime"] = c.Runtime
 	}
 	if c.Compat.WideInputStrictOutput != nil || c.Compat.StripReferenceMarkers != nil {
@@ -55,6 +55,24 @@ func (c Config) MarshalJSON() ([]byte, error) {
 		m["_vercel_sync_time"] = c.VercelSyncTime
 	}
 	return json.Marshal(m)
+}
+
+func runtimeConfigPresent(runtime RuntimeConfig) bool {
+	return runtime.AccountMaxInflight > 0 ||
+		runtime.AccountMaxQueue > 0 ||
+		runtime.GlobalMaxInflight > 0 ||
+		runtime.TokenRefreshIntervalHours > 0 ||
+		runtime.DisableUpstreamFileUploads != nil ||
+		runtime.AccountHealthEnabled != nil ||
+		runtime.AccountHealthRecoveryWindowSeconds > 0 ||
+		runtime.AccountHealthMaxCooldownSeconds > 0 ||
+		runtime.AccountHealthCooldown429Seconds > 0 ||
+		runtime.AccountHealthCooldown403Seconds > 0 ||
+		runtime.AccountHealthCooldownAuthSeconds > 0 ||
+		runtime.AccountHealthCooldown5xxSeconds > 0 ||
+		runtime.AccountHealthCooldownNetworkSeconds > 0 ||
+		runtime.AccountHealthCooldownEmptySeconds > 0 ||
+		runtime.AccountHealthCooldownMutedSeconds > 0
 }
 
 func (c *Config) UnmarshalJSON(b []byte) error {

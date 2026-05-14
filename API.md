@@ -428,6 +428,7 @@ data: [DONE]
 
 - 请求必须为 `multipart/form-data`，否则返回 `400`。
 - 请求体总大小上限 `100 MiB`（超限返回 `413`）。
+- 若 `runtime.disable_upstream_file_uploads=true`，`/v1/files` 与 inline/base64 文件上传都会返回 `400`，history split 也不会上传 `HISTORY.txt`。
 - 成功返回 OpenAI `file` 对象（`id/object/bytes/filename/purpose/status` 等字段），并附带 `account_id` 便于定位来源账号。
 
 ---
@@ -708,7 +709,7 @@ data: {"type":"message_stop"}
 
 - `success`
 - `admin`（`has_password_hash`、`jwt_expire_hours`、`jwt_valid_after_unix`、`default_password_warning`）
-- `runtime`（`account_max_inflight`、`account_max_queue`、`global_max_inflight`、`token_refresh_interval_hours`）
+- `runtime`（`account_max_inflight`、`account_max_queue`、`global_max_inflight`、`token_refresh_interval_hours`、`disable_upstream_file_uploads`、`account_health_*`）
 - `compat`（`wide_input_strict_output`、`strip_reference_markers`）
 - `responses` / `embeddings`
 - `auto_delete`（`mode`：`none` / `single` / `all`；旧配置 `sessions=true` 仍按 `all` 处理）
@@ -723,6 +724,8 @@ data: {"type":"message_stop"}
 
 - `admin.jwt_expire_hours`
 - `runtime.account_max_inflight` / `runtime.account_max_queue` / `runtime.global_max_inflight` / `runtime.token_refresh_interval_hours`
+- `runtime.disable_upstream_file_uploads`
+- `runtime.account_health_enabled` 与 `runtime.account_health_*_seconds` 冷却/恢复参数
 - `compat.wide_input_strict_output` / `compat.strip_reference_markers`
 - `responses.store_ttl_seconds`
 - `embeddings.provider`

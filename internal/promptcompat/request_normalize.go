@@ -31,6 +31,9 @@ func NormalizeOpenAIChatRequest(store ConfigReader, req map[string]any, traceID 
 	}
 	toolPolicy := DefaultToolChoicePolicy()
 	finalPrompt, toolNames := BuildOpenAIPrompt(messagesRaw, req["tools"], traceID, toolPolicy, thinkingEnabled)
+	if err := ValidatePromptLength(finalPrompt); err != nil {
+		return StandardRequest{}, err
+	}
 	toolNames = ensureToolDetectionEnabled(toolNames, req["tools"])
 	passThrough := collectOpenAIChatPassThrough(req)
 	refFileIDs := CollectOpenAIRefFileIDs(req)
@@ -85,6 +88,9 @@ func NormalizeOpenAIResponsesRequest(store ConfigReader, req map[string]any, tra
 		return StandardRequest{}, err
 	}
 	finalPrompt, toolNames := BuildOpenAIPrompt(messagesRaw, req["tools"], traceID, toolPolicy, thinkingEnabled)
+	if err := ValidatePromptLength(finalPrompt); err != nil {
+		return StandardRequest{}, err
+	}
 	toolNames = ensureToolDetectionEnabled(toolNames, req["tools"])
 	if !toolPolicy.IsNone() {
 		toolPolicy.Allowed = namesToSet(toolNames)

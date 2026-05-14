@@ -146,6 +146,29 @@ func TestPreprocessInlineFileInputsDeduplicatesIdenticalPayloads(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsRejectsInlineUploadWhenUpstreamUploadsDisabled(t *testing.T) {
+	disabled := false
+	ds := &inlineUploadDSStub{}
+	h := &openAITestSurface{Store: mockOpenAIConfig{wideInput: true, uploadsEnabled: &disabled}, Auth: streamStatusAuthStub{}, DS: ds}
+	reqBody := `{"model":"deepseek-v4-flash","messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,QUJDRA=="}}]}],"stream":false}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer direct-token")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.ChatCompletions(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no upload calls when upstream uploads are disabled, got %d", len(ds.uploadCalls))
+	}
+	if ds.completionReq != nil {
+		t.Fatalf("did not expect completion call when inline upload is rejected")
+	}
+}
+
 func TestChatCompletionsUploadsInlineFilesBeforeCompletion(t *testing.T) {
 	ds := &inlineUploadDSStub{}
 	h := &openAITestSurface{Store: mockOpenAIConfig{wideInput: true}, Auth: streamStatusAuthStub{}, DS: ds}

@@ -5,7 +5,7 @@ func (p *Pool) canQueueLocked(target string, exclude map[string]bool) bool {
 		if exclude[target] {
 			return false
 		}
-		if _, ok := p.store.FindAccount(target); !ok {
+		if _, ok := p.store.FindAvailableAccount(target, p.now()); !ok {
 			return false
 		}
 	}

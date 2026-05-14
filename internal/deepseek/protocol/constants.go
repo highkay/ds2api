@@ -3,6 +3,10 @@ package protocol
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
+	"math/rand"
+	"strconv"
+	"time"
 )
 
 const (
@@ -48,6 +52,7 @@ var defaultSkipExactPaths = []string{
 }
 
 var BaseHeaders = cloneStringMap(defaultBaseHeaders)
+var RangersID string
 var SkipContainsPatterns = cloneStringSlice(defaultSkipContainsPatterns)
 var SkipExactPathSet = toStringSet(defaultSkipExactPaths)
 
@@ -61,18 +66,29 @@ type sharedConstants struct {
 var sharedConstantsJSON []byte
 
 func init() {
+	RangersID = fmt.Sprintf("%d", rand.Uint64()%10000000000000000000)
 	cfg := sharedConstants{}
 	if err := json.Unmarshal(sharedConstantsJSON, &cfg); err != nil {
+		applyDynamicBaseHeaders()
 		return
 	}
 	if len(cfg.BaseHeaders) > 0 {
 		BaseHeaders = cloneStringMap(cfg.BaseHeaders)
 	}
+	applyDynamicBaseHeaders()
 	if len(cfg.SkipContainsPattern) > 0 {
 		SkipContainsPatterns = cloneStringSlice(cfg.SkipContainsPattern)
 	}
 	if len(cfg.SkipExactPaths) > 0 {
 		SkipExactPathSet = toStringSet(cfg.SkipExactPaths)
+	}
+}
+
+func applyDynamicBaseHeaders() {
+	_, offset := time.Now().Zone()
+	BaseHeaders["x-client-timezone-offset"] = strconv.Itoa(offset)
+	if RangersID != "" {
+		BaseHeaders["x-rangers-id"] = RangersID
 	}
 }
 

@@ -7,18 +7,19 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"unicode"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 )
 
 func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) {
 	clients := c.requestClientsForAccount(acc)
+	accountID := strings.TrimSpace(acc.Identifier())
 	payload := map[string]any{
 		"password":  strings.TrimSpace(acc.Password),
-		"device_id": "deepseek_to_api",
-		"os":        "android",
+		"device_id": DeviceID(accountID),
+		"os":        "Android",
 	}
 	if email := strings.TrimSpace(acc.Email); email != "" {
 		payload["email"] = email
@@ -62,10 +63,25 @@ func (c *Client) CreateSession(ctx context.Context, a *auth.RequestAuth, maxAtte
 		resp, status, err := c.postJSONWithStatus(ctx, clients.regular, clients.fallback, dsprotocol.DeepSeekCreateSessionURL, headers, map[string]any{"agent": "chat"})
 		if err != nil {
 			config.Logger.Warn("[create_session] request error", "error", err, "account", a.AccountID)
+			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+				refreshed = false
+				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
+				continue
+			}
 			attempts++
 			continue
 		}
 		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
+		if muted, muteErr := c.handleMutedResponse(ctx, a, "create session", resp); muted {
+			if muteErr != nil {
+				return "", muteErr
+			}
+			refreshed = false
+			attempts++
+			clients = c.requestClientsForAuth(ctx, a)
+			continue
+		}
 		if status == http.StatusOK && code == 0 && bizCode == 0 {
 			sessionID := extractCreateSessionID(resp)
 			if sessionID != "" {
@@ -80,9 +96,10 @@ func (c *Client) CreateSession(ctx context.Context, a *auth.RequestAuth, maxAtte
 					continue
 				}
 			}
-			if c.Auth.SwitchAccount(ctx, a) {
+			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)) {
 				refreshed = false
 				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
 				continue
 			}
 		}
@@ -115,10 +132,25 @@ func (c *Client) GetPowForTarget(ctx context.Context, a *auth.RequestAuth, targe
 			config.Logger.Warn("[get_pow] request error", "error", err, "account", a.AccountID, "target_path", targetPath)
 			lastFailureKind = FailureUnknown
 			lastFailureMessage = err.Error()
+			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+				refreshed = false
+				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
+				continue
+			}
 			attempts++
 			continue
 		}
 		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
+		if muted, muteErr := c.handleMutedResponse(ctx, a, "get pow", resp); muted {
+			if muteErr != nil {
+				return "", muteErr
+			}
+			refreshed = false
+			attempts++
+			clients = c.requestClientsForAuth(ctx, a)
+			continue
+		}
 		if status == http.StatusOK && code == 0 && bizCode == 0 {
 			data, _ := resp["data"].(map[string]any)
 			bizData, _ := data["biz_data"].(map[string]any)
@@ -144,9 +176,10 @@ func (c *Client) GetPowForTarget(ctx context.Context, a *auth.RequestAuth, targe
 					continue
 				}
 			}
-			if c.Auth.SwitchAccount(ctx, a) {
+			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)) {
 				refreshed = false
 				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
 				continue
 			}
 		}
@@ -156,140 +189,4 @@ func (c *Client) GetPowForTarget(ctx context.Context, a *auth.RequestAuth, targe
 		return "", &RequestFailure{Op: "get pow", Kind: lastFailureKind, Message: lastFailureMessage}
 	}
 	return "", errors.New("get pow failed")
-}
-
-func (c *Client) authHeaders(token string) map[string]string {
-	headers := make(map[string]string, len(dsprotocol.BaseHeaders)+1)
-	for k, v := range dsprotocol.BaseHeaders {
-		headers[k] = v
-	}
-	headers["authorization"] = "Bearer " + token
-	return headers
-}
-
-func isTokenInvalid(status int, code int, bizCode int, msg string, bizMsg string) bool {
-	msg = strings.ToLower(strings.TrimSpace(msg) + " " + strings.TrimSpace(bizMsg))
-	if status == http.StatusUnauthorized || status == http.StatusForbidden {
-		return true
-	}
-	if code == 40001 || code == 40002 || code == 40003 || bizCode == 40001 || bizCode == 40002 || bizCode == 40003 {
-		return true
-	}
-	return strings.Contains(msg, "token") ||
-		strings.Contains(msg, "unauthorized") ||
-		strings.Contains(msg, "expired") ||
-		strings.Contains(msg, "not login") ||
-		strings.Contains(msg, "login required") ||
-		strings.Contains(msg, "invalid jwt")
-}
-
-func shouldAttemptRefresh(status int, code int, bizCode int, msg string, bizMsg string) bool {
-	if isTokenInvalid(status, code, bizCode, msg, bizMsg) {
-		return true
-	}
-	// Some DeepSeek failures come back as HTTP 200/code=0 but with non-zero biz_code.
-	// Only attempt refresh when these biz failures still look auth-related.
-	return status == http.StatusOK &&
-		code == 0 &&
-		bizCode != 0 &&
-		isAuthIndicativeBizFailure(msg, bizMsg)
-}
-
-func isAuthIndicativeBizFailure(msg string, bizMsg string) bool {
-	combined := strings.ToLower(strings.TrimSpace(msg) + " " + strings.TrimSpace(bizMsg))
-	authKeywords := []string{
-		"auth",
-		"authorization",
-		"credential",
-		"expired",
-		"invalid jwt",
-		"jwt",
-		"login",
-		"not login",
-		"session expired",
-		"token",
-		"unauthorized",
-		"登录",
-		"未登录",
-		"认证",
-		"凭证",
-		"会话过期",
-		"令牌",
-	}
-	for _, keyword := range authKeywords {
-		if strings.Contains(combined, keyword) {
-			return true
-		}
-	}
-	return false
-}
-
-func authFailureKind(useConfigToken bool) FailureKind {
-	if useConfigToken {
-		return FailureManagedUnauthorized
-	}
-	return FailureDirectUnauthorized
-}
-
-func failureMessage(msg string, bizMsg string, fallback string) string {
-	if trimmed := strings.TrimSpace(bizMsg); trimmed != "" {
-		return trimmed
-	}
-	if trimmed := strings.TrimSpace(msg); trimmed != "" {
-		return trimmed
-	}
-	return strings.TrimSpace(fallback)
-}
-
-// DeepSeek has returned create-session ids in both biz_data.id and
-// biz_data.chat_session.id across observed response variants; accept either.
-func extractCreateSessionID(resp map[string]any) string {
-	data, _ := resp["data"].(map[string]any)
-	bizData, _ := data["biz_data"].(map[string]any)
-	if sessionID, _ := bizData["id"].(string); strings.TrimSpace(sessionID) != "" {
-		return strings.TrimSpace(sessionID)
-	}
-	if chatSession, ok := bizData["chat_session"].(map[string]any); ok {
-		if sessionID, _ := chatSession["id"].(string); strings.TrimSpace(sessionID) != "" {
-			return strings.TrimSpace(sessionID)
-		}
-	}
-	return ""
-}
-
-func extractResponseStatus(resp map[string]any) (code int, bizCode int, msg string, bizMsg string) {
-	code = intFrom(resp["code"])
-	msg, _ = resp["msg"].(string)
-	data, _ := resp["data"].(map[string]any)
-	bizCode = intFrom(data["biz_code"])
-	bizMsg, _ = data["biz_msg"].(string)
-	if strings.TrimSpace(bizMsg) == "" {
-		if bizData, ok := data["biz_data"].(map[string]any); ok {
-			bizMsg, _ = bizData["msg"].(string)
-		}
-	}
-	return code, bizCode, msg, bizMsg
-}
-
-func normalizeMobileForLogin(raw string) (mobile string, areaCode any) {
-	s := strings.TrimSpace(raw)
-	if s == "" {
-		return "", nil
-	}
-	hasPlus := strings.HasPrefix(s, "+")
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		if unicode.IsDigit(r) {
-			b.WriteRune(r)
-		}
-	}
-	digits := b.String()
-	if digits == "" {
-		return "", nil
-	}
-	if (hasPlus || strings.HasPrefix(digits, "86")) && strings.HasPrefix(digits, "86") && len(digits) == 13 {
-		return digits[2:], nil
-	}
-	return digits, nil
 }

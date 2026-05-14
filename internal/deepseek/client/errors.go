@@ -11,6 +11,7 @@ const (
 	FailureUnknown             FailureKind = ""
 	FailureDirectUnauthorized  FailureKind = "direct_unauthorized"
 	FailureManagedUnauthorized FailureKind = "managed_unauthorized"
+	FailureAccountMuted        FailureKind = "account_muted"
 )
 
 type RequestFailure struct {

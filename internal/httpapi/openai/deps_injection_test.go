@@ -16,6 +16,7 @@ type mockOpenAIConfig struct {
 	embedProv           string
 	historySplitEnabled bool
 	historySplitTurns   int
+	uploadsEnabled      *bool
 }
 
 func (m mockOpenAIConfig) ModelAliases() map[string]string { return m.aliases }
@@ -40,6 +41,9 @@ func (m mockOpenAIConfig) HistorySplitTriggerAfterTurns() int {
 		return 1
 	}
 	return m.historySplitTurns
+}
+func (m mockOpenAIConfig) UpstreamFileUploadsEnabled() bool {
+	return m.uploadsEnabled == nil || *m.uploadsEnabled
 }
 
 func TestNormalizeOpenAIChatRequestWithConfigInterface(t *testing.T) {

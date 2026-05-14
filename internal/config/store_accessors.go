@@ -159,6 +159,89 @@ func (s *Store) RuntimeTokenRefreshIntervalHours() int {
 	return 6
 }
 
+func (s *Store) UpstreamFileUploadsEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.DisableUpstreamFileUploads == nil || !*s.cfg.Runtime.DisableUpstreamFileUploads
+}
+
+type upstreamFileUploadsEnabledReader interface {
+	UpstreamFileUploadsEnabled() bool
+}
+
+func UpstreamFileUploadsEnabledFrom(reader any) bool {
+	if reader == nil {
+		return true
+	}
+	if r, ok := reader.(upstreamFileUploadsEnabledReader); ok {
+		return r.UpstreamFileUploadsEnabled()
+	}
+	return true
+}
+
+func (s *Store) AccountHealthEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.AccountHealthEnabled == nil {
+		return true
+	}
+	return *s.cfg.Runtime.AccountHealthEnabled
+}
+
+func (s *Store) AccountHealthRecoveryWindowSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthRecoveryWindowSeconds
+}
+
+func (s *Store) AccountHealthMaxCooldownSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthMaxCooldownSeconds
+}
+
+func (s *Store) AccountHealthCooldown429Seconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthCooldown429Seconds
+}
+
+func (s *Store) AccountHealthCooldown403Seconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthCooldown403Seconds
+}
+
+func (s *Store) AccountHealthCooldownAuthSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthCooldownAuthSeconds
+}
+
+func (s *Store) AccountHealthCooldown5xxSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthCooldown5xxSeconds
+}
+
+func (s *Store) AccountHealthCooldownNetworkSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthCooldownNetworkSeconds
+}
+
+func (s *Store) AccountHealthCooldownEmptySeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthCooldownEmptySeconds
+}
+
+func (s *Store) AccountHealthCooldownMutedSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Runtime.AccountHealthCooldownMutedSeconds
+}
+
 func (s *Store) AutoDeleteSessions() bool {
 	return s.AutoDeleteMode() != "none"
 }

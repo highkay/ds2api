@@ -8,6 +8,7 @@ import (
 
 	"ds2api/internal/auth"
 	"ds2api/internal/chathistory"
+	"ds2api/internal/config"
 	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/httpapi/openai/shared"
 )
@@ -33,6 +34,10 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer h.Auth.Release(a)
+	if !config.UpstreamFileUploadsEnabledFrom(h.Store) {
+		shared.WriteOpenAIError(w, http.StatusBadRequest, "Upstream file uploads are disabled by runtime configuration.")
+		return
+	}
 	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))), "multipart/form-data") {
 		shared.WriteOpenAIError(w, http.StatusBadRequest, "content-type must be multipart/form-data")
 		return

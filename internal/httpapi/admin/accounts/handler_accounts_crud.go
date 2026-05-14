@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -55,6 +56,7 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 		end = total
 	}
 	items := make([]map[string]any, 0, end-start)
+	now := time.Now()
 	for _, acc := range accounts[start:end] {
 		testStatus, _ := h.Store.AccountTestStatus(acc.Identifier())
 		token := strings.TrimSpace(acc.Token)
@@ -69,6 +71,10 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 			"has_token":     token != "",
 			"token_preview": maskSecretPreview(token),
 			"test_status":   testStatus,
+			"active":        acc.IsActive(),
+			"muted":         acc.IsMuted(now),
+			"mute_until":    acc.MuteUntil,
+			"last_used":     acc.LastUsed,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total, "page": page, "page_size": pageSize, "total_pages": totalPages})
@@ -121,6 +127,7 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	name, nameOK := fieldStringOptional(req, "name")
 	remark, remarkOK := fieldStringOptional(req, "remark")
+	activeRaw, activeOK := req["active"]
 
 	err := h.Store.Update(func(c *config.Config) error {
 		for i, acc := range c.Accounts {
@@ -132,6 +139,10 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 			}
 			if remarkOK {
 				c.Accounts[i].Remark = remark
+			}
+			if activeOK {
+				active := boolFromAny(activeRaw)
+				c.Accounts[i].Active = &active
 			}
 			return nil
 		}
@@ -145,7 +156,21 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
 		return
 	}
+	if activeOK {
+		h.Pool.Reset()
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_accounts": len(h.Store.Snapshot().Accounts)})
+}
+
+func boolFromAny(v any) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		return strings.EqualFold(strings.TrimSpace(x), "true") || strings.TrimSpace(x) == "1"
+	default:
+		return false
+	}
 }
 
 func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {

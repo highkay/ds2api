@@ -274,7 +274,7 @@ Common fields:
 - `keys` / `api_keys`: client API keys; `api_keys` adds `name` and `remark` metadata while `keys` remains compatible.
 - `accounts`: managed DeepSeek accounts, supporting `email` or `mobile` login plus proxy/name/remark metadata.
 - `model_aliases`: one shared alias map for OpenAI / Claude / Gemini model names.
-- `runtime`: account concurrency, queueing, and token refresh behavior, hot-reloadable via Admin Settings.
+- `runtime`: account concurrency, queueing, token refresh, account health cooldowns, and upstream file-upload policy, hot-reloadable via Admin Settings.
 - `auto_delete.mode`: remote session cleanup after each request, supporting `none` / `single` / `all`.
 - `history_split`: multi-turn history split policy, now forced on globally; tune its trigger threshold to avoid inlining all long history into the prompt.
 

@@ -159,7 +159,7 @@ func toStringSlice(v any) ([]string, bool) {
 func toAccount(m map[string]any) config.Account {
 	email := fieldString(m, "email")
 	mobile := config.NormalizeMobileForStorage(fieldString(m, "mobile"))
-	return config.Account{
+	acc := config.Account{
 		Name:     fieldString(m, "name"),
 		Remark:   fieldString(m, "remark"),
 		Email:    email,
@@ -167,6 +167,11 @@ func toAccount(m map[string]any) config.Account {
 		Password: fieldString(m, "password"),
 		ProxyID:  fieldString(m, "proxy_id"),
 	}
+	if v, ok := m["active"]; ok {
+		active := boolValue(v)
+		acc.Active = &active
+	}
+	return acc
 }
 
 func toAPIKeys(v any) ([]config.APIKey, bool) {
@@ -293,6 +298,17 @@ func fieldStringOptional(m map[string]any, key string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(fmt.Sprintf("%v", v)), true
+}
+
+func boolValue(v any) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		return strings.EqualFold(strings.TrimSpace(x), "true") || strings.TrimSpace(x) == "1"
+	default:
+		return false
+	}
 }
 
 func statusOr(v int, d int) int {

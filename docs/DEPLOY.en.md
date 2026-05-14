@@ -68,6 +68,8 @@ Built-in GitHub Actions workflow: `.github/workflows/release-artifacts.yml`
 - **Outputs**: multi-platform binary archives + `sha256sums.txt`
 - **Container publishing**: GHCR only (`ghcr.io/cjackhwang/ds2api`)
 
+In addition, `.github/workflows/ghcr.yml` automatically builds and pushes multi-arch GHCR images on `main` pushes, `v*` tag pushes, or manual dispatch. Tags include the branch name, version tag, `sha-*`, and `latest` for the default branch.
+
 | Platform | Architecture | Format |
 | --- | --- | --- |
 | Linux | amd64, arm64 | `.tar.gz` |

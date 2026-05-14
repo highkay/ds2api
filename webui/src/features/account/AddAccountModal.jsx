@@ -63,6 +63,9 @@ export default function AddAccountModal({
                             onChange={e => setNewAccount({ ...newAccount, mobile: e.target.value })}
                         />
                     </div>
+                    <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                        {t('accountManager.accountLoginHint')}
+                    </div>
                     <div>
                         <label className="block text-sm font-medium mb-1.5">{t('accountManager.passwordLabel')} <span className="text-destructive">*</span></label>
                         <input

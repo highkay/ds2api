@@ -68,6 +68,8 @@ cp config.example.json config.json
 - **构建产物**：多平台二进制压缩包 + `sha256sums.txt`
 - **容器镜像发布**：仅发布到 GHCR（`ghcr.io/cjackhwang/ds2api`）
 
+另外，`.github/workflows/ghcr.yml` 会在 `main` push、`v*` tag push 或手动触发时自动构建并推送多架构 GHCR 镜像，tag 包含分支名、版本 tag、`sha-*`，默认分支额外发布 `latest`。
+
 | 平台 | 架构 | 文件格式 |
 | --- | --- | --- |
 | Linux | amd64, arm64 | `.tar.gz` |

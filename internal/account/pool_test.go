@@ -236,6 +236,45 @@ func TestPoolAcquireRotatesIntoTokenlessAccounts(t *testing.T) {
 	}
 }
 
+func TestPoolSkipsMutedAccountsUntilMuteExpires(t *testing.T) {
+	t.Setenv("DS2API_ACCOUNT_MAX_INFLIGHT", "1")
+	t.Setenv("DS2API_ACCOUNT_MAX_QUEUE", "")
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["k1"],
+		"accounts":[
+			{"email":"muted@example.com","token":"token1","muted":true,"mute_until":4102444800},
+			{"email":"active@example.com","token":"token2"}
+		]
+	}`)
+
+	pool := NewPool(config.LoadStore())
+	acc, ok := pool.Acquire("", nil)
+	if !ok {
+		t.Fatal("expected acquire to skip muted account and select active account")
+	}
+	if got := acc.Identifier(); got != "active@example.com" {
+		t.Fatalf("expected active account, got %q", got)
+	}
+}
+
+func TestPoolPenalizeDemotesAccountDuringHealthSelection(t *testing.T) {
+	pool := newPoolForTest(t, "1")
+	pool.Penalize("acc1@example.com", PenaltyHTTP429)
+
+	acc, ok := pool.Acquire("", nil)
+	if !ok {
+		t.Fatal("expected acquire to select non-penalized account")
+	}
+	if got := acc.Identifier(); got != "acc2@example.com" {
+		t.Fatalf("expected acc2 after acc1 penalty, got %q", got)
+	}
+	status := pool.Status()
+	accounts, _ := status["accounts"].([]map[string]any)
+	if len(accounts) == 0 {
+		t.Fatalf("expected health account status, got %#v", status["accounts"])
+	}
+}
+
 func TestPoolAcquireWaitQueuesAndSucceedsAfterRelease(t *testing.T) {
 	pool := newSingleAccountPoolForTest(t, "1")
 	first, ok := pool.Acquire("", nil)

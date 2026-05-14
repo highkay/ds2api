@@ -58,9 +58,16 @@ function loadSharedConstants() {
 }
 
 const shared = loadSharedConstants();
+const rangersId = String(Math.floor(Math.random() * 10000000000000000000));
+const timezoneOffset = String(-new Date().getTimezoneOffset() * 60);
+const baseHeaders = {
+  ...shared.baseHeaders,
+  'x-client-timezone-offset': timezoneOffset,
+  'x-rangers-id': rangersId,
+};
 
 module.exports = {
-  BASE_HEADERS: Object.freeze(shared.baseHeaders),
+  BASE_HEADERS: Object.freeze(baseHeaders),
   SKIP_PATTERNS: Object.freeze(shared.skipPatterns),
   SKIP_EXACT_PATHS: new Set(shared.skipExactPaths),
 };

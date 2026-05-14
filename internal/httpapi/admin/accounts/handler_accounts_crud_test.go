@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -84,6 +85,34 @@ func TestUpdateAccountMetadataPreservesCredentials(t *testing.T) {
 	}
 	if acc.Password != "secret" {
 		t.Fatalf("password should be preserved, got %#v", acc)
+	}
+}
+
+func TestAddAccountAcceptsEmailOnly(t *testing.T) {
+	h := newAdminTestHandler(t, `{"accounts":[]}`)
+
+	r := chi.NewRouter()
+	r.Post("/admin/accounts", h.addAccount)
+
+	body := []byte(`{"email":"global@example.com","password":"secret"}`)
+	req := httptest.NewRequest(http.MethodPost, "/admin/accounts", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	snap := h.Store.Snapshot()
+	if len(snap.Accounts) != 1 {
+		t.Fatalf("expected one account, got %#v", snap.Accounts)
+	}
+	acc := snap.Accounts[0]
+	if acc.Email != "global@example.com" {
+		t.Fatalf("expected email account stored, got %#v", acc)
+	}
+	if acc.Identifier() != "global@example.com" {
+		t.Fatalf("expected email identifier, got %q", acc.Identifier())
 	}
 }
 

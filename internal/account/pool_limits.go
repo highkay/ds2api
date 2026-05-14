@@ -14,7 +14,11 @@ func (p *Pool) ApplyRuntimeLimits(maxInflightPerAccount, maxQueueSize, globalMax
 		maxQueueSize = 0
 	}
 	if globalMaxInflight <= 0 {
-		globalMaxInflight = maxInflightPerAccount * len(p.store.Accounts())
+		accountCount := len(p.queue)
+		if p.store != nil {
+			accountCount = len(p.store.Accounts())
+		}
+		globalMaxInflight = maxInflightPerAccount * accountCount
 		if globalMaxInflight <= 0 {
 			globalMaxInflight = maxInflightPerAccount
 		}

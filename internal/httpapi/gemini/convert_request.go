@@ -30,6 +30,9 @@ func normalizeGeminiRequest(store ConfigReader, routeModel string, req map[strin
 
 	toolsRaw := convertGeminiTools(req["tools"])
 	finalPrompt, toolNames := promptcompat.BuildOpenAIPromptForAdapter(messagesRaw, toolsRaw, "", thinkingEnabled)
+	if err := promptcompat.ValidatePromptLength(finalPrompt); err != nil {
+		return promptcompat.StandardRequest{}, err
+	}
 	passThrough := collectGeminiPassThrough(req)
 
 	return promptcompat.StandardRequest{

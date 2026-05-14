@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 	trans "ds2api/internal/deepseek/transport"
@@ -90,6 +91,9 @@ func (c *Client) UploadFile(ctx context.Context, a *auth.RequestAuth, req Upload
 			powHeader = ""
 			lastFailureKind = FailureUnknown
 			lastFailureMessage = err.Error()
+			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+				refreshed = false
+			}
 			attempts++
 			continue
 		}
@@ -110,6 +114,15 @@ func (c *Client) UploadFile(ctx context.Context, a *auth.RequestAuth, req Upload
 			}
 		}
 		code, bizCode, msg, bizMsg := extractResponseStatus(parsed)
+		if muted, muteErr := c.handleMutedResponse(ctx, a, "upload file", parsed); muted {
+			if muteErr != nil {
+				return nil, muteErr
+			}
+			refreshed = false
+			powHeader = ""
+			attempts++
+			continue
+		}
 		if resp.StatusCode == http.StatusOK && code == 0 && bizCode == 0 {
 			result := extractUploadFileResult(parsed)
 			result.Raw = parsed
@@ -150,7 +163,7 @@ func (c *Client) UploadFile(ctx context.Context, a *auth.RequestAuth, req Upload
 					continue
 				}
 			}
-			if c.Auth.SwitchAccount(ctx, a) {
+			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(resp.StatusCode, code, bizCode, msg, bizMsg)) {
 				refreshed = false
 				attempts++
 				continue

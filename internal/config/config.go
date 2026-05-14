@@ -26,13 +26,17 @@ type Config struct {
 }
 
 type Account struct {
-	Name     string `json:"name,omitempty"`
-	Remark   string `json:"remark,omitempty"`
-	Email    string `json:"email,omitempty"`
-	Mobile   string `json:"mobile,omitempty"`
-	Password string `json:"password,omitempty"`
-	Token    string `json:"token,omitempty"`
-	ProxyID  string `json:"proxy_id,omitempty"`
+	Name      string  `json:"name,omitempty"`
+	Remark    string  `json:"remark,omitempty"`
+	Email     string  `json:"email,omitempty"`
+	Mobile    string  `json:"mobile,omitempty"`
+	Password  string  `json:"password,omitempty"`
+	Token     string  `json:"token,omitempty"`
+	ProxyID   string  `json:"proxy_id,omitempty"`
+	Active    *bool   `json:"active,omitempty"`
+	Muted     bool    `json:"muted,omitempty"`
+	MuteUntil float64 `json:"mute_until,omitempty"`
+	LastUsed  float64 `json:"last_used,omitempty"`
 }
 
 type APIKey struct {
@@ -161,10 +165,21 @@ type AdminConfig struct {
 }
 
 type RuntimeConfig struct {
-	AccountMaxInflight        int `json:"account_max_inflight,omitempty"`
-	AccountMaxQueue           int `json:"account_max_queue,omitempty"`
-	GlobalMaxInflight         int `json:"global_max_inflight,omitempty"`
-	TokenRefreshIntervalHours int `json:"token_refresh_interval_hours,omitempty"`
+	AccountMaxInflight                  int   `json:"account_max_inflight,omitempty"`
+	AccountMaxQueue                     int   `json:"account_max_queue,omitempty"`
+	GlobalMaxInflight                   int   `json:"global_max_inflight,omitempty"`
+	TokenRefreshIntervalHours           int   `json:"token_refresh_interval_hours,omitempty"`
+	DisableUpstreamFileUploads          *bool `json:"disable_upstream_file_uploads,omitempty"`
+	AccountHealthEnabled                *bool `json:"account_health_enabled,omitempty"`
+	AccountHealthRecoveryWindowSeconds  int   `json:"account_health_recovery_window_seconds,omitempty"`
+	AccountHealthMaxCooldownSeconds     int   `json:"account_health_max_cooldown_seconds,omitempty"`
+	AccountHealthCooldown429Seconds     int   `json:"account_health_cooldown_429_seconds,omitempty"`
+	AccountHealthCooldown403Seconds     int   `json:"account_health_cooldown_403_seconds,omitempty"`
+	AccountHealthCooldownAuthSeconds    int   `json:"account_health_cooldown_auth_seconds,omitempty"`
+	AccountHealthCooldown5xxSeconds     int   `json:"account_health_cooldown_5xx_seconds,omitempty"`
+	AccountHealthCooldownNetworkSeconds int   `json:"account_health_cooldown_network_seconds,omitempty"`
+	AccountHealthCooldownEmptySeconds   int   `json:"account_health_cooldown_empty_seconds,omitempty"`
+	AccountHealthCooldownMutedSeconds   int   `json:"account_health_cooldown_muted_seconds,omitempty"`
 }
 
 type ResponsesConfig struct {

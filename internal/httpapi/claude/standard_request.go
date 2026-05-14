@@ -38,6 +38,9 @@ func normalizeClaudeRequest(store ConfigReader, req map[string]any) (claudeNorma
 	}
 	thinkingEnabled := util.ResolveThinkingEnabled(req, false)
 	finalPrompt := prompt.MessagesPrepareWithThinking(toMessageMaps(dsPayload["messages"]), thinkingEnabled)
+	if err := promptcompat.ValidatePromptLength(finalPrompt); err != nil {
+		return claudeNormalizedRequest{}, err
+	}
 	toolNames := extractClaudeToolNames(toolsRequested)
 	if len(toolNames) == 0 && len(toolsRequested) > 0 {
 		toolNames = []string{"__any_tool__"}

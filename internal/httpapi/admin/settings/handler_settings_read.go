@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"ds2api/internal/account"
 	authn "ds2api/internal/auth"
 	"ds2api/internal/config"
 )
@@ -12,6 +13,7 @@ func (h *Handler) getSettings(w http.ResponseWriter, _ *http.Request) {
 	snap := h.Store.Snapshot()
 	recommended := defaultRuntimeRecommended(len(snap.Accounts), h.Store.RuntimeAccountMaxInflight())
 	needsSync := config.IsVercel() && snap.VercelSyncHash != "" && snap.VercelSyncHash != h.computeSyncHash()
+	health := account.LoadHealthConfigFromStore(h.Store)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"admin": map[string]any{
@@ -21,10 +23,21 @@ func (h *Handler) getSettings(w http.ResponseWriter, _ *http.Request) {
 			"default_password_warning": authn.UsingDefaultAdminKey(h.Store),
 		},
 		"runtime": map[string]any{
-			"account_max_inflight":         h.Store.RuntimeAccountMaxInflight(),
-			"account_max_queue":            h.Store.RuntimeAccountMaxQueue(recommended),
-			"global_max_inflight":          h.Store.RuntimeGlobalMaxInflight(recommended),
-			"token_refresh_interval_hours": h.Store.RuntimeTokenRefreshIntervalHours(),
+			"account_max_inflight":                    h.Store.RuntimeAccountMaxInflight(),
+			"account_max_queue":                       h.Store.RuntimeAccountMaxQueue(recommended),
+			"global_max_inflight":                     h.Store.RuntimeGlobalMaxInflight(recommended),
+			"token_refresh_interval_hours":            h.Store.RuntimeTokenRefreshIntervalHours(),
+			"disable_upstream_file_uploads":           !h.Store.UpstreamFileUploadsEnabled(),
+			"account_health_enabled":                  health.Enabled,
+			"account_health_recovery_window_seconds":  health.RecoveryWindowSeconds,
+			"account_health_max_cooldown_seconds":     health.MaxCooldownSeconds,
+			"account_health_cooldown_429_seconds":     health.Cooldown429Seconds,
+			"account_health_cooldown_403_seconds":     health.Cooldown403Seconds,
+			"account_health_cooldown_auth_seconds":    health.CooldownAuthSeconds,
+			"account_health_cooldown_5xx_seconds":     health.Cooldown5xxSeconds,
+			"account_health_cooldown_network_seconds": health.CooldownNetworkSeconds,
+			"account_health_cooldown_empty_seconds":   health.CooldownEmptySeconds,
+			"account_health_cooldown_muted_seconds":   health.CooldownMutedSeconds,
 		},
 		"compat":      snap.Compat,
 		"responses":   snap.Responses,

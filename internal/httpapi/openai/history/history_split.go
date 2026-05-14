@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"ds2api/internal/auth"
+	"ds2api/internal/config"
 	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
@@ -25,6 +26,9 @@ type Service struct {
 
 func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
 	if s.DS == nil || s.Store == nil || a == nil {
+		return stdReq, nil
+	}
+	if !config.UpstreamFileUploadsEnabledFrom(s.Store) {
 		return stdReq, nil
 	}
 

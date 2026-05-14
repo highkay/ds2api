@@ -28,9 +28,11 @@ type RequestAuth struct {
 	DeepSeekToken  string
 	CallerID       string
 	AccountID      string
+	TargetAccount  string
 	Account        config.Account
 	TriedAccounts  map[string]bool
 	resolver       *Resolver
+	Penalized      bool
 }
 
 type LoginFunc func(ctx context.Context, acc config.Account) (string, error)
@@ -99,6 +101,7 @@ func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, targ
 			UseConfigToken: true,
 			CallerID:       callerID,
 			AccountID:      acc.Identifier(),
+			TargetAccount:  target,
 			Account:        acc,
 			TriedAccounts:  tried,
 			resolver:       r,
@@ -107,6 +110,7 @@ func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, targ
 		if err := r.ensureManagedToken(ctx, a); err != nil {
 			lastEnsureErr = err
 			tried[a.AccountID] = true
+			r.penalize(a, account.PenaltyAuthFailed)
 			r.Pool.Release(a.AccountID)
 			if target != "" {
 				return nil, err
@@ -166,6 +170,7 @@ func (r *Resolver) RefreshToken(ctx context.Context, a *RequestAuth) bool {
 	a.Account.Token = ""
 	if err := r.loginAndPersist(ctx, a); err != nil {
 		config.Logger.Error("[refresh_token] failed", "account", a.AccountID, "error", err)
+		r.penalize(a, account.PenaltyAuthFailed)
 		return false
 	}
 	return true
@@ -182,13 +187,26 @@ func (r *Resolver) MarkTokenInvalid(a *RequestAuth) {
 }
 
 func (r *Resolver) SwitchAccount(ctx context.Context, a *RequestAuth) bool {
+	return r.SwitchAccountWithPenalty(ctx, a, account.PenaltyUnknown)
+}
+
+func (r *Resolver) SwitchAccountWithPenalty(ctx context.Context, a *RequestAuth, kind account.PenaltyKind) bool {
 	if !a.UseConfigToken {
+		return false
+	}
+	if strings.TrimSpace(a.TargetAccount) != "" {
+		if a.AccountID != "" && kind != account.PenaltyUnknown {
+			r.penalize(a, kind)
+		}
 		return false
 	}
 	if a.TriedAccounts == nil {
 		a.TriedAccounts = map[string]bool{}
 	}
 	if a.AccountID != "" {
+		if kind != account.PenaltyUnknown {
+			r.penalize(a, kind)
+		}
 		a.TriedAccounts[a.AccountID] = true
 		r.Pool.Release(a.AccountID)
 	}
@@ -200,19 +218,73 @@ func (r *Resolver) SwitchAccount(ctx context.Context, a *RequestAuth) bool {
 		a.Account = acc
 		a.AccountID = acc.Identifier()
 		if err := r.ensureManagedToken(ctx, a); err != nil {
+			r.penalize(a, account.PenaltyAuthFailed)
 			a.TriedAccounts[a.AccountID] = true
 			r.Pool.Release(a.AccountID)
 			continue
 		}
+		a.Penalized = false
 		return true
 	}
+}
+
+func (a *RequestAuth) SwitchAccount(ctx context.Context) bool {
+	if a == nil || a.resolver == nil {
+		return false
+	}
+	return a.resolver.SwitchAccount(ctx, a)
+}
+
+func (a *RequestAuth) SwitchAccountWithPenalty(ctx context.Context, kind account.PenaltyKind) bool {
+	if a == nil || a.resolver == nil {
+		return false
+	}
+	return a.resolver.SwitchAccountWithPenalty(ctx, a, kind)
+}
+
+func (r *Resolver) MarkAccountMuted(a *RequestAuth, muteUntil float64) {
+	if r == nil || r.Store == nil || a == nil || !a.UseConfigToken || a.AccountID == "" {
+		return
+	}
+	if a.TriedAccounts == nil {
+		a.TriedAccounts = map[string]bool{}
+	}
+	a.TriedAccounts[a.AccountID] = true
+	a.Account.Muted = true
+	a.Account.MuteUntil = muteUntil
+	if err := r.Store.MarkAccountMuted(a.AccountID, muteUntil); err != nil {
+		config.Logger.Warn("[account_mute] persist failed", "account", a.AccountID, "mute_until", muteUntil, "error", err)
+	}
+	r.penalize(a, account.PenaltyMuted)
+}
+
+func (a *RequestAuth) MarkAccountMuted(muteUntil float64) {
+	if a == nil || a.resolver == nil {
+		return
+	}
+	a.resolver.MarkAccountMuted(a, muteUntil)
 }
 
 func (r *Resolver) Release(a *RequestAuth) {
 	if a == nil || !a.UseConfigToken || a.AccountID == "" {
 		return
 	}
+	if !a.Penalized {
+		r.Pool.RecordSuccess(a.AccountID)
+	}
 	r.Pool.Release(a.AccountID)
+}
+
+func (r *Resolver) penalize(a *RequestAuth, kind account.PenaltyKind) {
+	if r == nil || r.Pool == nil || a == nil || a.AccountID == "" || kind == account.PenaltyUnknown {
+		return
+	}
+	r.Pool.Penalize(a.AccountID, kind)
+	a.Penalized = true
+}
+
+func (r *Resolver) Penalize(a *RequestAuth, kind account.PenaltyKind) {
+	r.penalize(a, kind)
 }
 
 func extractCallerToken(req *http.Request) string {

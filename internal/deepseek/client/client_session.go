@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 )
@@ -55,6 +56,12 @@ func (c *Client) GetSessionCount(ctx context.Context, a *auth.RequestAuth, maxAt
 		resp, status, err := c.getJSONWithStatus(ctx, clients.regular, reqURL, headers)
 		if err != nil {
 			config.Logger.Warn("[get_session_count] request error", "error", err, "account", a.AccountID)
+			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+				refreshed = false
+				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
+				continue
+			}
 			attempts++
 			continue
 		}
@@ -92,9 +99,10 @@ func (c *Client) GetSessionCount(ctx context.Context, a *auth.RequestAuth, maxAt
 					continue
 				}
 			}
-			if c.Auth.SwitchAccount(ctx, a) {
+			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)) {
 				refreshed = false
 				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
 				continue
 			}
 		}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 )
@@ -47,6 +48,12 @@ func (c *Client) DeleteSession(ctx context.Context, a *auth.RequestAuth, session
 		resp, status, err := c.postJSONWithStatus(ctx, clients.regular, clients.fallback, dsprotocol.DeepSeekDeleteSessionURL, headers, payload)
 		if err != nil {
 			config.Logger.Warn("[delete_session] request error", "error", err, "session_id", sessionID)
+			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+				refreshed = false
+				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
+				continue
+			}
 			attempts++
 			continue
 		}
@@ -67,9 +74,10 @@ func (c *Client) DeleteSession(ctx context.Context, a *auth.RequestAuth, session
 					continue
 				}
 			}
-			if c.Auth.SwitchAccount(ctx, a) {
+			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)) {
 				refreshed = false
 				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
 				continue
 			}
 		}

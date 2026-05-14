@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 	trans "ds2api/internal/deepseek/transport"
@@ -26,11 +27,39 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 	for attempts < maxAttempts {
 		resp, err := c.streamPost(ctx, clients.stream, dsprotocol.DeepSeekCompletionURL, headers, payload)
 		if err != nil {
+			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+				nextPow, powErr := c.GetPow(ctx, a, maxAttempts)
+				if powErr != nil {
+					return nil, powErr
+				}
+				clients = c.requestClientsForAuth(ctx, a)
+				headers = c.authHeaders(a.DeepSeekToken)
+				headers["x-ds-pow-response"] = nextPow
+				powResp = nextPow
+			}
 			attempts++
 			time.Sleep(time.Second)
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
+			muted, muteErr := c.detectCompletionMute(ctx, a, resp)
+			if muteErr != nil {
+				_ = resp.Body.Close()
+				return nil, muteErr
+			}
+			if muted {
+				_ = resp.Body.Close()
+				nextPow, powErr := c.GetPow(ctx, a, maxAttempts)
+				if powErr != nil {
+					return nil, powErr
+				}
+				attempts++
+				clients = c.requestClientsForAuth(ctx, a)
+				headers = c.authHeaders(a.DeepSeekToken)
+				headers["x-ds-pow-response"] = nextPow
+				powResp = nextPow
+				continue
+			}
 			if captureSession != nil {
 				resp.Body = captureSession.WrapBody(resp.Body, resp.StatusCode)
 			}
@@ -40,11 +69,35 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 		if captureSession != nil {
 			resp.Body = captureSession.WrapBody(resp.Body, resp.StatusCode)
 		}
+		penalty := completionPenaltyForStatus(resp.StatusCode)
 		_ = resp.Body.Close()
+		if a.UseConfigToken && penalty != account.PenaltyUnknown && c.Auth.SwitchAccountWithPenalty(ctx, a, penalty) {
+			nextPow, powErr := c.GetPow(ctx, a, maxAttempts)
+			if powErr != nil {
+				return nil, powErr
+			}
+			clients = c.requestClientsForAuth(ctx, a)
+			headers = c.authHeaders(a.DeepSeekToken)
+			headers["x-ds-pow-response"] = nextPow
+			powResp = nextPow
+		}
 		attempts++
 		time.Sleep(time.Second)
 	}
 	return nil, errors.New("completion failed")
+}
+
+func completionPenaltyForStatus(status int) account.PenaltyKind {
+	switch {
+	case status == http.StatusTooManyRequests:
+		return account.PenaltyHTTP429
+	case status == http.StatusForbidden:
+		return account.PenaltyHTTP403
+	case status >= 500 && status <= 599:
+		return account.PenaltyHTTP5xx
+	default:
+		return account.PenaltyUnknown
+	}
 }
 
 func (c *Client) streamPost(ctx context.Context, doer trans.Doer, url string, headers map[string]string, payload any) (*http.Response, error) {

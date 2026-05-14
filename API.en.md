@@ -427,6 +427,7 @@ Constraints and behavior:
 
 - `Content-Type` must be `multipart/form-data` (otherwise `400`).
 - Total request size limit is `100 MiB` (over-limit returns `413`).
+- If `runtime.disable_upstream_file_uploads=true`, `/v1/files` and inline/base64 file uploads return `400`, and history split will not upload `HISTORY.txt`.
 - Success returns an OpenAI `file` object (`id/object/bytes/filename/purpose/status`, etc.) and includes `account_id` for source-account tracing.
 
 ---
@@ -707,7 +708,7 @@ Reads runtime settings and status, including:
 
 - `success`
 - `admin` (`has_password_hash`, `jwt_expire_hours`, `jwt_valid_after_unix`, `default_password_warning`)
-- `runtime` (`account_max_inflight`, `account_max_queue`, `global_max_inflight`, `token_refresh_interval_hours`)
+- `runtime` (`account_max_inflight`, `account_max_queue`, `global_max_inflight`, `token_refresh_interval_hours`, `disable_upstream_file_uploads`, `account_health_*`)
 - `compat` (`wide_input_strict_output`, `strip_reference_markers`)
 - `responses` / `embeddings`
 - `auto_delete` (`mode`: `none` / `single` / `all`; legacy `sessions=true` is still treated as `all`)
@@ -722,6 +723,8 @@ Hot-updates runtime settings. Supported fields:
 
 - `admin.jwt_expire_hours`
 - `runtime.account_max_inflight` / `runtime.account_max_queue` / `runtime.global_max_inflight` / `runtime.token_refresh_interval_hours`
+- `runtime.disable_upstream_file_uploads`
+- `runtime.account_health_enabled` and `runtime.account_health_*_seconds` cooldown/recovery fields
 - `compat.wide_input_strict_output` / `compat.strip_reference_markers`
 - `responses.store_ttl_seconds`
 - `embeddings.provider`

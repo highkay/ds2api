@@ -179,7 +179,7 @@ flowchart LR
 - `internal/httpapi/admin/*`：Admin API 根装配与 auth/accounts/config/settings/proxies/rawsamples/vercel/history/devcapture/version 等资源子包。
 - `internal/chathistory`：服务器端对话记录持久化、分页、单条详情和保留策略。
 - `internal/config`：配置加载、校验、运行时 settings 热更新。
-- `internal/account`：托管账号池、并发槽位、等待队列。
+- `internal/account`：托管账号池、并发槽位、等待队列、账号健康降权与冷却调度。
 
 ## 4. WebUI 与运行时关系
 

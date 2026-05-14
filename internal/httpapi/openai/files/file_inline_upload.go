@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"ds2api/internal/auth"
+	"ds2api/internal/config"
 	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
@@ -57,6 +58,12 @@ func (h *Handler) PreprocessInlineFileInputs(ctx context.Context, a *auth.Reques
 	if h == nil || h.DS == nil || len(req) == 0 {
 		return nil
 	}
+	if !config.UpstreamFileUploadsEnabledFrom(h.Store) {
+		if containsInlineUploadPayload(req) {
+			return &inlineFileUploadError{status: http.StatusBadRequest, message: "Upstream file uploads are disabled by runtime configuration."}
+		}
+		return nil
+	}
 	state := &inlineUploadState{
 		ctx:          ctx,
 		handler:      h,
@@ -76,6 +83,27 @@ func (h *Handler) PreprocessInlineFileInputs(ctx context.Context, a *auth.Reques
 		req["ref_file_ids"] = stringsToAnySlice(refIDs)
 	}
 	return nil
+}
+
+func containsInlineUploadPayload(raw any) bool {
+	switch x := raw.(type) {
+	case []any:
+		for _, item := range x {
+			if containsInlineUploadPayload(item) {
+				return true
+			}
+		}
+	case map[string]any:
+		if _, ok, _ := decodeOpenAIInlineFileBlock(x); ok {
+			return true
+		}
+		for _, key := range []string{"messages", "input", "attachments", "content", "files", "items", "data", "source", "file", "image_url"} {
+			if nested, ok := x[key]; ok && containsInlineUploadPayload(nested) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func WriteInlineFileError(w http.ResponseWriter, err error) {

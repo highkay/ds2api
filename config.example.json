@@ -64,7 +64,18 @@
     "account_max_inflight": 2,
     "account_max_queue": 0,
     "global_max_inflight": 0,
-    "token_refresh_interval_hours": 6
+    "token_refresh_interval_hours": 6,
+    "disable_upstream_file_uploads": false,
+    "account_health_enabled": true,
+    "account_health_recovery_window_seconds": 300,
+    "account_health_max_cooldown_seconds": 1800,
+    "account_health_cooldown_429_seconds": 30,
+    "account_health_cooldown_403_seconds": 60,
+    "account_health_cooldown_auth_seconds": 120,
+    "account_health_cooldown_5xx_seconds": 10,
+    "account_health_cooldown_network_seconds": 5,
+    "account_health_cooldown_empty_seconds": 0,
+    "account_health_cooldown_muted_seconds": 300
   },
   "auto_delete": {
     "mode": "none"

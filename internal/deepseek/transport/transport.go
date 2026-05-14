@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"time"
 
 	utls "github.com/refraction-networking/utls"
@@ -16,6 +17,17 @@ type Doer interface {
 }
 
 type DialContextFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+
+type okhttpTransport struct {
+	base *http.Transport
+}
+
+func (t *okhttpTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Header.Get("OkHttp-Preemptive") == "" {
+		req.Header.Set("OkHttp-Preemptive", "1")
+	}
+	return t.base.RoundTrip(req)
+}
 
 type Client struct {
 	http *http.Client
@@ -36,13 +48,14 @@ func NewWithDialContext(timeout time.Duration, dialContext DialContextFunc) *Cli
 		MaxIdleConnsPerHost: 100,
 		IdleConnTimeout:     90 * time.Second,
 		DialContext:         dialContext,
-		DialTLSContext:      safariTLSDialer(dialContext),
+		DialTLSContext:      chromeTLSDialer(dialContext),
 		TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 	if useEnvProxy {
 		base.Proxy = http.ProxyFromEnvironment
 	}
-	return &Client{http: &http.Client{Timeout: timeout, Transport: base}}
+	jar, _ := cookiejar.New(nil)
+	return &Client{http: &http.Client{Timeout: timeout, Transport: &okhttpTransport{base: base}, Jar: jar}}
 }
 
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
@@ -65,10 +78,11 @@ func NewFallbackClient(timeout time.Duration, dialContext DialContextFunc) *http
 	if useEnvProxy {
 		base.Proxy = http.ProxyFromEnvironment
 	}
-	return &http.Client{Timeout: timeout, Transport: base}
+	jar, _ := cookiejar.New(nil)
+	return &http.Client{Timeout: timeout, Transport: &okhttpTransport{base: base}, Jar: jar}
 }
 
-func safariTLSDialer(dialContext DialContextFunc) func(ctx context.Context, network, addr string) (net.Conn, error) {
+func chromeTLSDialer(dialContext DialContextFunc) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	if dialContext == nil {
 		dialContext = (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 	}
@@ -79,7 +93,7 @@ func safariTLSDialer(dialContext DialContextFunc) func(ctx context.Context, netw
 		}
 		host, _, _ := net.SplitHostPort(addr)
 		uCfg := &utls.Config{ServerName: host}
-		uConn := utls.UClient(plainConn, uCfg, utls.HelloSafari_Auto)
+		uConn := utls.UClient(plainConn, uCfg, utls.HelloChrome_Auto)
 		if err := forceHTTP11ALPN(uConn); err != nil {
 			_ = plainConn.Close()
 			return nil, err

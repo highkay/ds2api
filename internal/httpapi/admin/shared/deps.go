@@ -32,6 +32,17 @@ type ConfigStore interface {
 	RuntimeAccountMaxQueue(defaultSize int) int
 	RuntimeGlobalMaxInflight(defaultSize int) int
 	RuntimeTokenRefreshIntervalHours() int
+	UpstreamFileUploadsEnabled() bool
+	AccountHealthEnabled() bool
+	AccountHealthRecoveryWindowSeconds() int
+	AccountHealthMaxCooldownSeconds() int
+	AccountHealthCooldown429Seconds() int
+	AccountHealthCooldown403Seconds() int
+	AccountHealthCooldownAuthSeconds() int
+	AccountHealthCooldown5xxSeconds() int
+	AccountHealthCooldownNetworkSeconds() int
+	AccountHealthCooldownEmptySeconds() int
+	AccountHealthCooldownMutedSeconds() int
 	AutoDeleteMode() string
 	HistorySplitEnabled() bool
 	HistorySplitTriggerAfterTurns() int
@@ -43,6 +54,7 @@ type PoolController interface {
 	Reset()
 	Status() map[string]any
 	ApplyRuntimeLimits(maxInflightPerAccount, maxQueueSize, globalMaxInflight int)
+	ApplyHealthConfig(cfg account.HealthConfig)
 }
 
 type OpenAIChatCaller interface {

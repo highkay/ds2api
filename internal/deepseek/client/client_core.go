@@ -37,8 +37,8 @@ func NewClient(store *config.Store, resolver *auth.Resolver) *Client {
 		capture:      devcapture.Global(),
 		regular:      trans.New(60 * time.Second),
 		stream:       trans.New(0),
-		fallback:     &http.Client{Timeout: 60 * time.Second},
-		fallbackS:    &http.Client{Timeout: 0},
+		fallback:     trans.NewFallbackClient(60*time.Second, nil),
+		fallbackS:    trans.NewFallbackClient(0, nil),
 		maxRetries:   3,
 		proxyClients: map[string]requestClients{},
 	}

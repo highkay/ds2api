@@ -50,6 +50,8 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
   -> 下游网页对话接口
 ```
 
+标准化后的最终 prompt 统一限制为 131072 个 Unicode 字符；OpenAI、Claude、Gemini 三条链路都会在上游调用前返回 `context too long` 错误。
+
 对应的关键代码入口：
 
 - OpenAI Chat / Responses：
@@ -225,6 +227,7 @@ OpenAI 文件相关实现：
 
 - inline/base64/data URL 上传：
   [internal/httpapi/openai/files/file_inline_upload.go](../internal/httpapi/openai/files/file_inline_upload.go)
+- 当 `runtime.disable_upstream_file_uploads=true` 时，显式 `/v1/files`、inline/base64 上传和 history split 的上游文件上传都会关闭；已有 `file_id` / `ref_file_ids` 仍按普通引用收集。
 - 文件 ID 收集：
   [internal/promptcompat/file_refs.go](../internal/promptcompat/file_refs.go)
 

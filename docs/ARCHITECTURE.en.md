@@ -179,7 +179,7 @@ flowchart LR
 - `internal/httpapi/admin/*`: Admin API root assembly plus auth/accounts/config/settings/proxies/rawsamples/vercel/history/devcapture/version resource packages.
 - `internal/chathistory`: server-side conversation history persistence, pagination, detail lookup, and retention policy.
 - `internal/config`: config loading/validation + runtime settings hot-reload.
-- `internal/account`: managed account pool, inflight slots, waiting queue.
+- `internal/account`: managed account pool, inflight slots, waiting queue, and account health weight/cooldown scheduling.
 
 ## 4. WebUI Runtime Relation
 
