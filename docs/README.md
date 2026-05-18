@@ -17,6 +17,7 @@
 
 - [API -> 网页对话纯文本兼容主链路说明](./prompt-compatibility.md)
 - [Tool Calling 统一语义](./toolcall-semantics.md)
+- [上游 Fork 监控清单](./upstream-forks.md)
 - [DeepSeek SSE 行为结构说明（逆向观察）](./DeepSeekSSE行为结构说明-2026-04-05.md)
 
 ### 文档维护约定
@@ -47,6 +48,7 @@ Recommended reading order:
 
 - [API -> pure-text web-chat compatibility pipeline](./prompt-compatibility.md)
 - [Tool-calling unified semantics](./toolcall-semantics.md)
+- [Upstream fork monitoring notes](./upstream-forks.md)
 - [DeepSeek SSE behavior notes (reverse-engineered)](./DeepSeekSSE行为结构说明-2026-04-05.md)
 
 ### Maintenance conventions

@@ -97,6 +97,10 @@ npm run build --prefix webui
 ./tests/scripts/run-live.sh
 ```
 
+## 上游 Fork 监控
+
+活跃 fork 的本地 review refs、功能主题和当前处理建议维护在 [上游 Fork 监控清单](./upstream-forks.md)。从外部 fork 吸收实现前，先刷新该清单中的 ref，再按功能块做最小化 cherry-pick 或重写，避免整分支合并带入无关架构变化。
+
 ## 项目结构
 
 为避免与其他文档重复维护，目录结构与模块职责已迁移到：

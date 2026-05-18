@@ -97,6 +97,10 @@ npm run build --prefix webui
 ./tests/scripts/run-live.sh
 ```
 
+## Upstream Fork Monitoring
+
+The local review refs, feature themes, and current recommendations for active forks are tracked in [Upstream fork monitoring notes](./upstream-forks.md). Before importing code from an external fork, refresh those refs and port the useful behavior in small feature slices instead of merging an entire fork branch.
+
 ## Project Structure
 
 To avoid documentation drift, directory layout and module responsibilities were moved to:
