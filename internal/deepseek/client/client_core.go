@@ -28,6 +28,9 @@ type Client struct {
 
 	proxyClientsMu sync.RWMutex
 	proxyClients   map[string]requestClients
+
+	hifLeimMu        sync.Mutex
+	hifLeimSkipUntil time.Time
 }
 
 func NewClient(store *config.Store, resolver *auth.Resolver) *Client {

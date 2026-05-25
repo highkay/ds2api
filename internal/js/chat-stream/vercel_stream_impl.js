@@ -33,6 +33,11 @@ const {
 } = require('./dedupe');
 
 const DEEPSEEK_COMPLETION_URL = 'https://chat.deepseek.com/api/v0/chat/completion';
+const DEEPSEEK_HIF_LEIM_URL = 'https://hif-leim.deepseek.com/query';
+const HIF_LEIM_TIMEOUT_MS = 800;
+const HIF_LEIM_FAILURE_BACKOFF_MS = 30_000;
+
+let hifLeimSkipUntil = 0;
 
 async function handleVercelStream(req, res, rawBody, payload) {
   const prep = await fetchStreamPrepare(req, rawBody);
@@ -86,13 +91,18 @@ async function handleVercelStream(req, res, rawBody, payload) {
   try {
     let completionRes;
     try {
+      const hifLeim = await fetchHifLeimHeader();
+      const upstreamHeaders = {
+        ...BASE_HEADERS,
+        authorization: `Bearer ${deepseekToken}`,
+        'x-ds-pow-response': powHeader,
+      };
+      if (hifLeim) {
+        upstreamHeaders['x-hif-leim'] = hifLeim;
+      }
       completionRes = await fetch(DEEPSEEK_COMPLETION_URL, {
         method: 'POST',
-        headers: {
-          ...BASE_HEADERS,
-          authorization: `Bearer ${deepseekToken}`,
-          'x-ds-pow-response': powHeader,
-        },
+        headers: upstreamHeaders,
         body: JSON.stringify(completionPayload),
         signal: upstreamController.signal,
       });
@@ -326,6 +336,41 @@ async function handleVercelStream(req, res, rawBody, payload) {
 
 function toBool(v) {
   return v === true;
+}
+
+async function fetchHifLeimHeader() {
+  const now = Date.now();
+  if (now < hifLeimSkipUntil) {
+    return '';
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HIF_LEIM_TIMEOUT_MS);
+  try {
+    const response = await fetch(DEEPSEEK_HIF_LEIM_URL, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'DeepSeek/1.8.0 Android/35',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`hif-leim status ${response.status}`);
+    }
+    const body = await response.json();
+    const value = asString(body && body.data && body.data.biz_data && body.data.biz_data.value);
+    const code = Number(body && body.code);
+    const bizCode = Number(body && body.data && body.data.biz_code);
+    if (code !== 0 || bizCode !== 0 || !value) {
+      throw new Error('hif-leim response missing successful value');
+    }
+    return value;
+  } catch (_err) {
+    hifLeimSkipUntil = Date.now() + HIF_LEIM_FAILURE_BACKOFF_MS;
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function upstreamEmptyOutputDetail(contentFilter, _text, thinking) {

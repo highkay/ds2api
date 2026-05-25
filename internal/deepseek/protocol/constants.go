@@ -14,6 +14,7 @@ const (
 	DeepSeekLoginURL             = "https://chat.deepseek.com/api/v0/users/login"
 	DeepSeekCreateSessionURL     = "https://chat.deepseek.com/api/v0/chat_session/create"
 	DeepSeekCreatePowURL         = "https://chat.deepseek.com/api/v0/chat/create_pow_challenge"
+	DeepSeekHifLeimURL           = "https://hif-leim.deepseek.com/query"
 	DeepSeekCompletionURL        = "https://chat.deepseek.com/api/v0/chat/completion"
 	DeepSeekContinueURL          = "https://chat.deepseek.com/api/v0/chat/continue"
 	DeepSeekUploadFileURL        = "https://chat.deepseek.com/api/v0/file/upload_file"

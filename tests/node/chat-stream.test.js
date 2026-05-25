@@ -123,6 +123,7 @@ function parseSSEDataFrames(body) {
 async function runMockVercelStream(upstreamLines, prepareOverrides = {}) {
   const originalFetch = global.fetch;
   const fetchURLs = [];
+  const fetchCalls = [];
   const prepareBody = {
     session_id: 'chatcmpl-test',
     lease_id: 'lease-test',
@@ -137,14 +138,18 @@ async function runMockVercelStream(upstreamLines, prepareOverrides = {}) {
     payload: { prompt: 'hello' },
     ...prepareOverrides,
   };
-  global.fetch = async (url) => {
+  global.fetch = async (url, options = {}) => {
     const textURL = String(url);
     fetchURLs.push(textURL);
+    fetchCalls.push({ url: textURL, options });
     if (textURL.includes('__stream_prepare=1')) {
       return jsonResponse(prepareBody);
     }
     if (textURL.includes('__stream_release=1')) {
       return jsonResponse({ success: true });
+    }
+    if (textURL.includes('hif-leim.deepseek.com/query')) {
+      return jsonResponse({ code: 0, data: { biz_code: 0, biz_data: { value: 'node-hif-value' } } });
     }
     return sseResponse(upstreamLines);
   };
@@ -153,7 +158,7 @@ async function runMockVercelStream(upstreamLines, prepareOverrides = {}) {
     const res = new MockStreamResponse();
     const payload = { model: 'gpt-test', stream: true };
     await handleVercelStream(req, res, Buffer.from(JSON.stringify(payload)), payload);
-    return { res, frames: parseSSEDataFrames(res.bodyText()), fetchURLs };
+    return { res, frames: parseSSEDataFrames(res.bodyText()), fetchURLs, fetchCalls };
   } finally {
     global.fetch = originalFetch;
   }
@@ -193,6 +198,16 @@ test('vercel stream keeps stop finish when content_filter arrives after visible 
   assert.equal(parsed[0].choices[0].delta.content, 'hello');
   assert.equal(parsed[1].choices[0].finish_reason, 'stop');
   assert.equal(parsed[1].usage.completion_tokens, 1);
+});
+
+test('vercel stream adds hif-leim header to DeepSeek completion request', async () => {
+  const { fetchCalls } = await runMockVercelStream([
+    'data: {"p":"response/content","v":"hello"}\n\n',
+    'data: [DONE]\n\n',
+  ]);
+  const completionCall = fetchCalls.find((call) => call.url.includes('/api/v0/chat/completion'));
+  assert.ok(completionCall);
+  assert.equal(completionCall.options.headers['x-hif-leim'], 'node-hif-value');
 });
 
 test('resolveToolcallPolicy defaults to feature-match + early emit when prepare flags missing', () => {

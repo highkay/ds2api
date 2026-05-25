@@ -55,6 +55,7 @@ func (c *Client) callContinue(ctx context.Context, a *auth.RequestAuth, sessionI
 	clients := c.requestClientsForAuth(ctx, a)
 	headers := c.authHeaders(a.DeepSeekToken)
 	headers["x-ds-pow-response"] = powResp
+	c.attachHifLeimHeader(ctx, a, headers)
 	payload := map[string]any{
 		"chat_session_id":    sessionID,
 		"message_id":         responseMessageID,
