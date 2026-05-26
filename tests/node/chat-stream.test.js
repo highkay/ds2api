@@ -120,6 +120,12 @@ function parseSSEDataFrames(body) {
     .map((frame) => frame.slice(5).trim());
 }
 
+function releasePayload(fetchCalls) {
+  const releaseCall = fetchCalls.find((call) => call.url.includes('__stream_release=1'));
+  assert.ok(releaseCall, 'expected stream release call');
+  return JSON.parse(Buffer.from(releaseCall.options.body).toString('utf8'));
+}
+
 async function runMockVercelStream(upstreamLines, prepareOverrides = {}) {
   const originalFetch = global.fetch;
   const fetchURLs = [];
@@ -170,23 +176,25 @@ test('chat-stream exposes parser test hooks', () => {
 });
 
 test('vercel stream emits Go-parity empty-output failure on DONE', async () => {
-  const { frames } = await runMockVercelStream(['data: [DONE]\n\n']);
+  const { frames, fetchCalls } = await runMockVercelStream(['data: [DONE]\n\n']);
   assert.equal(frames.length, 2);
   const failed = JSON.parse(frames[0]);
   assert.equal(failed.status_code, 429);
   assert.equal(failed.error.type, 'rate_limit_error');
   assert.equal(failed.error.code, 'upstream_empty_output');
   assert.equal(frames[1], '[DONE]');
+  assert.equal(releasePayload(fetchCalls).penalty, 'http_429');
 });
 
 test('vercel stream emits content_filter failure when upstream filters empty output', async () => {
-  const { frames } = await runMockVercelStream(['data: {"code":"content_filter"}\n\n']);
+  const { frames, fetchCalls } = await runMockVercelStream(['data: {"code":"content_filter"}\n\n']);
   assert.equal(frames.length, 2);
   const failed = JSON.parse(frames[0]);
   assert.equal(failed.status_code, 400);
   assert.equal(failed.error.type, 'invalid_request_error');
   assert.equal(failed.error.code, 'content_filter');
   assert.equal(frames[1], '[DONE]');
+  assert.equal(releasePayload(fetchCalls).penalty, undefined);
 });
 
 test('vercel stream keeps stop finish when content_filter arrives after visible text', async () => {

@@ -52,6 +52,9 @@ type responsesStreamRuntime struct {
 	messagePartAdded  bool
 	sequence          int
 	failed            bool
+	finalErrorStatus  int
+	finalErrorMessage string
+	finalErrorCode    string
 
 	persistResponse func(obj map[string]any)
 }
@@ -102,6 +105,9 @@ func newResponsesStreamRuntime(
 
 func (s *responsesStreamRuntime) failResponse(status int, message, code string) {
 	s.failed = true
+	s.finalErrorStatus = status
+	s.finalErrorMessage = message
+	s.finalErrorCode = code
 	failedResp := map[string]any{
 		"id":          s.responseID,
 		"type":        "response",

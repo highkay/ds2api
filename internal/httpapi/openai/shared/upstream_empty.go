@@ -2,6 +2,8 @@ package shared
 
 import "net/http"
 
+const UpstreamEmptyOutputCode = "upstream_empty_output"
+
 func ShouldWriteUpstreamEmptyOutputError(text string) bool {
 	return text == ""
 }
@@ -12,9 +14,13 @@ func UpstreamEmptyOutputDetail(contentFilter bool, text, thinking string) (int, 
 		return http.StatusBadRequest, "Upstream content filtered the response and returned no output.", "content_filter"
 	}
 	if thinking != "" {
-		return http.StatusTooManyRequests, "Upstream account hit a rate limit and returned reasoning without visible output.", "upstream_empty_output"
+		return http.StatusTooManyRequests, "Upstream account hit a rate limit and returned reasoning without visible output.", UpstreamEmptyOutputCode
 	}
-	return http.StatusTooManyRequests, "Upstream account hit a rate limit and returned empty output.", "upstream_empty_output"
+	return http.StatusTooManyRequests, "Upstream account hit a rate limit and returned empty output.", UpstreamEmptyOutputCode
+}
+
+func ShouldPenalizeUpstreamEmptyOutput(status int, code string) bool {
+	return status == http.StatusTooManyRequests && code == UpstreamEmptyOutputCode
 }
 
 func WriteUpstreamEmptyOutputError(w http.ResponseWriter, text, thinking string, contentFilter bool) bool {

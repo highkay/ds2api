@@ -122,23 +122,28 @@ function buildInternalGoHeaders(req, opts = {}) {
 
 function createLeaseReleaser(req, leaseID) {
   let released = false;
-  return async () => {
+  return async (penalty = '') => {
     if (released || !leaseID) {
       return;
     }
     released = true;
     try {
-      await releaseStreamLease(req, leaseID);
+      await releaseStreamLease(req, leaseID, penalty);
     } catch (_err) {
       // Ignore release errors. Lease TTL cleanup on Go side still prevents permanent leaks.
     }
   };
 }
 
-async function releaseStreamLease(req, leaseID) {
+async function releaseStreamLease(req, leaseID, penalty = '') {
   const url = buildInternalGoURL(req);
   url.searchParams.set('__stream_release', '1');
-  const body = Buffer.from(JSON.stringify({ lease_id: leaseID }));
+  const payload = { lease_id: leaseID };
+  const normalizedPenalty = asString(penalty);
+  if (normalizedPenalty) {
+    payload.penalty = normalizedPenalty;
+  }
+  const body = Buffer.from(JSON.stringify(payload));
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1500);

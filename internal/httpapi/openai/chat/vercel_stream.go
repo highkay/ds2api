@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 	"ds2api/internal/promptcompat"
@@ -143,7 +144,8 @@ func (h *Handler) handleVercelStreamRelease(w http.ResponseWriter, r *http.Reque
 		writeOpenAIError(w, http.StatusBadRequest, "lease_id is required")
 		return
 	}
-	if !h.releaseStreamLease(leaseID) {
+	penalty, _ := req["penalty"].(string)
+	if !h.releaseStreamLease(leaseID, account.ParsePenaltyKind(penalty)) {
 		writeOpenAIError(w, http.StatusNotFound, "stream lease not found")
 		return
 	}
@@ -199,10 +201,14 @@ func (h *Handler) holdStreamLease(a *auth.RequestAuth) string {
 	return leaseID
 }
 
-func (h *Handler) releaseStreamLease(leaseID string) bool {
+func (h *Handler) releaseStreamLease(leaseID string, penalties ...account.PenaltyKind) bool {
 	leaseID = strings.TrimSpace(leaseID)
 	if leaseID == "" {
 		return false
+	}
+	penalty := account.PenaltyUnknown
+	if len(penalties) > 0 {
+		penalty = penalties[0]
 	}
 
 	h.leaseMu.Lock()
@@ -218,6 +224,9 @@ func (h *Handler) releaseStreamLease(leaseID string) bool {
 		return false
 	}
 	if h.Auth != nil {
+		if penalty != account.PenaltyUnknown {
+			lease.Auth.Penalize(penalty)
+		}
 		h.Auth.Release(lease.Auth)
 	}
 	return true

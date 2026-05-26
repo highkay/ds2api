@@ -106,10 +106,14 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if stdReq.Stream {
-		h.handleStream(w, r, resp, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession)
+		if h.handleStream(w, r, resp, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession) {
+			penalizeUpstreamEmptyOutput(a)
+		}
 		return
 	}
-	h.handleNonStream(w, resp, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession)
+	if h.handleNonStream(w, resp, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession) {
+		penalizeUpstreamEmptyOutput(a)
+	}
 }
 
 func (h *Handler) autoDeleteRemoteSession(ctx context.Context, a *auth.RequestAuth, sessionID string) {
@@ -145,7 +149,7 @@ func (h *Handler) autoDeleteRemoteSession(ctx context.Context, a *auth.RequestAu
 	}
 }
 
-func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) {
+func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) bool {
 	if resp.StatusCode != http.StatusOK {
 		defer func() { _ = resp.Body.Close() }()
 		body, _ := io.ReadAll(resp.Body)
@@ -153,7 +157,7 @@ func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, co
 			historySession.error(resp.StatusCode, string(body), "error", "", "")
 		}
 		writeOpenAIError(w, resp.StatusCode, string(body))
-		return
+		return false
 	}
 	result := sse.CollectStream(resp, thinkingEnabled, true)
 
@@ -170,7 +174,7 @@ func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, co
 			historySession.error(status, message, code, finalThinking, finalText)
 		}
 		writeUpstreamEmptyOutputError(w, finalText, finalThinking, result.ContentFilter)
-		return
+		return shouldPenalizeUpstreamEmptyOutput(status, code)
 	}
 	respBody := openaifmt.BuildChatCompletion(completionID, model, finalPrompt, finalThinking, finalText, toolNames)
 	finishReason := "stop"
@@ -183,9 +187,10 @@ func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, co
 		historySession.success(http.StatusOK, finalThinking, finalText, finishReason, openaifmt.BuildChatUsage(finalPrompt, finalThinking, finalText))
 	}
 	writeJSON(w, http.StatusOK, respBody)
+	return false
 }
 
-func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) {
+func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) bool {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -193,7 +198,7 @@ func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *htt
 			historySession.error(resp.StatusCode, string(body), "error", "", "")
 		}
 		writeOpenAIError(w, resp.StatusCode, string(body))
-		return
+		return false
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
@@ -270,4 +275,5 @@ func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *htt
 			}
 		},
 	})
+	return shouldPenalizeUpstreamEmptyOutput(streamRuntime.finalErrorStatus, streamRuntime.finalErrorCode)
 }

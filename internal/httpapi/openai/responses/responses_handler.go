@@ -115,18 +115,22 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 
 	responseID := "resp_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	if stdReq.Stream {
-		h.handleResponsesStream(w, r, resp, owner, responseID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, stdReq.ToolChoice, traceID)
+		if h.handleResponsesStream(w, r, resp, owner, responseID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, stdReq.ToolChoice, traceID) {
+			penalizeUpstreamEmptyOutput(a)
+		}
 		return
 	}
-	h.handleResponsesNonStream(w, resp, owner, responseID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, stdReq.ToolChoice, traceID)
+	if h.handleResponsesNonStream(w, resp, owner, responseID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, stdReq.ToolChoice, traceID) {
+		penalizeUpstreamEmptyOutput(a)
+	}
 }
 
-func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, resp *http.Response, owner, responseID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolChoice promptcompat.ToolChoicePolicy, traceID string) {
+func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, resp *http.Response, owner, responseID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolChoice promptcompat.ToolChoicePolicy, traceID string) bool {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		writeOpenAIError(w, resp.StatusCode, strings.TrimSpace(string(body)))
-		return
+		return false
 	}
 	result := sse.CollectStream(resp, thinkingEnabled, true)
 	stripReferenceMarkers := h.compatStripReferenceMarkers()
@@ -136,28 +140,31 @@ func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, resp *http.Res
 		sanitizedText = replaceCitationMarkersWithLinks(sanitizedText, result.CitationLinks)
 	}
 	textParsed := toolcall.ParseAssistantToolCallsDetailed(sanitizedText, sanitizedThinking, toolNames)
-	if len(textParsed.Calls) == 0 && writeUpstreamEmptyOutputError(w, sanitizedText, sanitizedThinking, result.ContentFilter) {
-		return
+	if len(textParsed.Calls) == 0 && shouldWriteUpstreamEmptyOutputError(sanitizedText) {
+		status, message, code := upstreamEmptyOutputDetail(result.ContentFilter, sanitizedText, sanitizedThinking)
+		writeOpenAIErrorWithCode(w, status, message, code)
+		return shouldPenalizeUpstreamEmptyOutput(status, code)
 	}
 	logResponsesToolPolicyRejection(traceID, toolChoice, textParsed, "text")
 
 	callCount := len(textParsed.Calls)
 	if toolChoice.IsRequired() && callCount == 0 {
 		writeOpenAIErrorWithCode(w, http.StatusUnprocessableEntity, "tool_choice requires at least one valid tool call.", "tool_choice_violation")
-		return
+		return false
 	}
 
 	responseObj := openaifmt.BuildResponseObject(responseID, model, finalPrompt, sanitizedThinking, sanitizedText, toolNames)
 	h.getResponseStore().put(owner, responseID, responseObj)
 	writeJSON(w, http.StatusOK, responseObj)
+	return false
 }
 
-func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, resp *http.Response, owner, responseID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolChoice promptcompat.ToolChoicePolicy, traceID string) {
+func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, resp *http.Response, owner, responseID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolChoice promptcompat.ToolChoicePolicy, traceID string) bool {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		writeOpenAIError(w, resp.StatusCode, strings.TrimSpace(string(body)))
-		return
+		return false
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
@@ -209,6 +216,7 @@ func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, 
 			streamRuntime.finalize()
 		},
 	})
+	return shouldPenalizeUpstreamEmptyOutput(streamRuntime.finalErrorStatus, streamRuntime.finalErrorCode)
 }
 
 func logResponsesToolPolicyRejection(traceID string, policy promptcompat.ToolChoicePolicy, parsed toolcall.ToolCallParseResult, channel string) {

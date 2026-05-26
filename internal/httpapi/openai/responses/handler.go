@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sync"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/chathistory"
 	"ds2api/internal/httpapi/openai/files"
@@ -87,6 +88,10 @@ func requestTraceID(r *http.Request) string {
 	return shared.RequestTraceID(r)
 }
 
+func shouldWriteUpstreamEmptyOutputError(text string) bool {
+	return shared.ShouldWriteUpstreamEmptyOutputError(text)
+}
+
 func cleanVisibleOutput(text string, stripReferenceMarkers bool) string {
 	return shared.CleanVisibleOutput(text, stripReferenceMarkers)
 }
@@ -101,6 +106,17 @@ func upstreamEmptyOutputDetail(contentFilter bool, text, thinking string) (int, 
 
 func writeUpstreamEmptyOutputError(w http.ResponseWriter, text, thinking string, contentFilter bool) bool {
 	return shared.WriteUpstreamEmptyOutputError(w, text, thinking, contentFilter)
+}
+
+func shouldPenalizeUpstreamEmptyOutput(status int, code string) bool {
+	return shared.ShouldPenalizeUpstreamEmptyOutput(status, code)
+}
+
+func penalizeUpstreamEmptyOutput(a *auth.RequestAuth) {
+	if a == nil {
+		return
+	}
+	a.Penalize(account.PenaltyHTTP429)
 }
 
 func filterIncrementalToolCallDeltasByAllowed(deltas []toolstream.ToolCallDelta, seenNames map[int]string) []toolstream.ToolCallDelta {

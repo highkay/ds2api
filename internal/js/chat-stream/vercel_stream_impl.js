@@ -189,7 +189,8 @@ async function handleVercelStream(req, res, rawBody, payload) {
       if (detected.length === 0 && !toolCallsEmitted && outputText.trim() === '') {
         const detail = upstreamEmptyOutputDetail(reason === 'content_filter', outputText, thinkingText);
         sendFailedChunk(res, detail.status, detail.message, detail.code);
-        await releaseLease();
+        const penalty = detail.status === 429 && detail.code === 'upstream_empty_output' ? 'http_429' : '';
+        await releaseLease(penalty);
         if (!res.writableEnded && !res.destroyed) {
           res.end();
         }

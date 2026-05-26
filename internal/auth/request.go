@@ -265,6 +265,13 @@ func (a *RequestAuth) MarkAccountMuted(muteUntil float64) {
 	a.resolver.MarkAccountMuted(a, muteUntil)
 }
 
+func (a *RequestAuth) Penalize(kind account.PenaltyKind) {
+	if a == nil || a.resolver == nil {
+		return
+	}
+	a.resolver.Penalize(a, kind)
+}
+
 func (r *Resolver) Release(a *RequestAuth) {
 	if a == nil || !a.UseConfigToken || a.AccountID == "" {
 		return

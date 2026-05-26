@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/chathistory"
 	"ds2api/internal/httpapi/openai/files"
@@ -112,6 +113,17 @@ func upstreamEmptyOutputDetail(contentFilter bool, text, thinking string) (int, 
 
 func writeUpstreamEmptyOutputError(w http.ResponseWriter, text, thinking string, contentFilter bool) bool {
 	return shared.WriteUpstreamEmptyOutputError(w, text, thinking, contentFilter)
+}
+
+func shouldPenalizeUpstreamEmptyOutput(status int, code string) bool {
+	return shared.ShouldPenalizeUpstreamEmptyOutput(status, code)
+}
+
+func penalizeUpstreamEmptyOutput(a *auth.RequestAuth) {
+	if a == nil {
+		return
+	}
+	a.Penalize(account.PenaltyHTTP429)
 }
 
 func formatIncrementalStreamToolCallDeltas(deltas []toolstream.ToolCallDelta, ids map[int]string) []map[string]any {

@@ -93,7 +93,10 @@ func TestHandleNonStreamReturns429WhenUpstreamOutputEmpty(t *testing.T) {
 	)
 	rec := httptest.NewRecorder()
 
-	h.handleNonStream(rec, resp, "cid-empty", "deepseek-v4-flash", "prompt", false, false, nil, nil)
+	penalize := h.handleNonStream(rec, resp, "cid-empty", "deepseek-v4-flash", "prompt", false, false, nil, nil)
+	if !penalize {
+		t.Fatalf("expected empty upstream output to request account penalty")
+	}
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected status 429 for empty upstream output, got %d body=%s", rec.Code, rec.Body.String())
 	}
@@ -112,7 +115,10 @@ func TestHandleNonStreamReturnsContentFilterErrorWhenUpstreamFilteredWithoutOutp
 	)
 	rec := httptest.NewRecorder()
 
-	h.handleNonStream(rec, resp, "cid-empty-filtered", "deepseek-v4-flash", "prompt", false, false, nil, nil)
+	penalize := h.handleNonStream(rec, resp, "cid-empty-filtered", "deepseek-v4-flash", "prompt", false, false, nil, nil)
+	if penalize {
+		t.Fatalf("did not expect content_filter empty output to request account penalty")
+	}
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 for filtered upstream output, got %d body=%s", rec.Code, rec.Body.String())
 	}
@@ -131,7 +137,10 @@ func TestHandleNonStreamReturns429WhenUpstreamHasOnlyThinking(t *testing.T) {
 	)
 	rec := httptest.NewRecorder()
 
-	h.handleNonStream(rec, resp, "cid-thinking-only", "deepseek-v4-pro", "prompt", true, false, nil, nil)
+	penalize := h.handleNonStream(rec, resp, "cid-thinking-only", "deepseek-v4-pro", "prompt", true, false, nil, nil)
+	if !penalize {
+		t.Fatalf("expected thinking-only upstream output to request account penalty")
+	}
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected status 429 for thinking-only upstream output, got %d body=%s", rec.Code, rec.Body.String())
 	}
@@ -150,7 +159,10 @@ func TestHandleNonStreamPromotesThinkingToolCallsWhenTextEmpty(t *testing.T) {
 	)
 	rec := httptest.NewRecorder()
 
-	h.handleNonStream(rec, resp, "cid-thinking-tool", "deepseek-v4-pro", "prompt", true, false, []string{"search"}, nil)
+	penalize := h.handleNonStream(rec, resp, "cid-thinking-tool", "deepseek-v4-pro", "prompt", true, false, []string{"search"}, nil)
+	if penalize {
+		t.Fatalf("did not expect thinking tool-call output to request account penalty")
+	}
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 for thinking tool calls, got %d body=%s", rec.Code, rec.Body.String())
 	}
@@ -208,6 +220,30 @@ func TestHandleStreamToolsPlainTextStreamsBeforeFinish(t *testing.T) {
 	}
 	if streamFinishReason(frames) != "stop" {
 		t.Fatalf("expected finish_reason=stop, body=%s", rec.Body.String())
+	}
+}
+
+func TestHandleStreamReturnsPenaltyWhenUpstreamOutputEmpty(t *testing.T) {
+	h := &Handler{}
+	resp := makeSSEHTTPResponse(`data: [DONE]`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	penalize := h.handleStream(rec, req, resp, "cid-empty-stream", "deepseek-v4-flash", "prompt", false, false, nil, nil)
+	if !penalize {
+		t.Fatalf("expected empty streaming upstream output to request account penalty")
+	}
+
+	frames, done := parseSSEDataFrames(t, rec.Body.String())
+	if !done {
+		t.Fatalf("expected [DONE], body=%s", rec.Body.String())
+	}
+	if len(frames) != 1 {
+		t.Fatalf("expected one failed frame, got %d body=%s", len(frames), rec.Body.String())
+	}
+	errObj, _ := frames[0]["error"].(map[string]any)
+	if asString(errObj["code"]) != "upstream_empty_output" {
+		t.Fatalf("expected code=upstream_empty_output, got %#v", frames[0])
 	}
 }
 
