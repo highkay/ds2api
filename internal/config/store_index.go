@@ -3,18 +3,23 @@ package config
 // rebuildIndexes must be called with the lock already held (or during init).
 func (s *Store) rebuildIndexes() {
 	prevStatus := s.accTest
+	prevProbe := s.accProbe
 	s.keyMap = make(map[string]struct{}, len(s.cfg.Keys))
 	for _, k := range s.cfg.Keys {
 		s.keyMap[k] = struct{}{}
 	}
 	s.accMap = make(map[string]int, len(s.cfg.Accounts))
 	s.accTest = make(map[string]string, len(s.cfg.Accounts))
+	s.accProbe = make(map[string]AccountRuntimeProbe, len(s.cfg.Accounts))
 	for i, acc := range s.cfg.Accounts {
 		id := acc.Identifier()
 		if id != "" {
 			s.accMap[id] = i
 			if status, ok := prevStatus[id]; ok {
 				s.setAccountTestStatusLocked(acc, status, "")
+			}
+			if probe, ok := prevProbe[id]; ok {
+				s.setAccountRuntimeProbeLocked(acc, probe, "")
 			}
 		}
 	}
@@ -51,5 +56,24 @@ func (s *Store) setAccountTestStatusLocked(acc Account, status, hintedIdentifier
 	}
 	if hintedIdentifier = lower(hintedIdentifier); hintedIdentifier != "" {
 		s.accTest[hintedIdentifier] = status
+	}
+}
+
+func (s *Store) setAccountRuntimeProbeLocked(acc Account, probe AccountRuntimeProbe, hintedIdentifier string) {
+	probe = probe.Clone()
+	if s.accProbe == nil {
+		s.accProbe = make(map[string]AccountRuntimeProbe)
+	}
+	if id := acc.Identifier(); id != "" {
+		s.accProbe[id] = probe
+	}
+	if email := acc.Email; email != "" {
+		s.accProbe[email] = probe
+	}
+	if mobile := CanonicalMobileKey(acc.Mobile); mobile != "" {
+		s.accProbe[mobile] = probe
+	}
+	if hintedIdentifier = lower(hintedIdentifier); hintedIdentifier != "" {
+		s.accProbe[hintedIdentifier] = probe
 	}
 }

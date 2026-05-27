@@ -119,6 +119,10 @@ async function handleVercelStream(req, res, rawBody, payload) {
     if (!completionRes.ok || !completionRes.body) {
       const detail = completionRes.body ? await completionRes.text() : '';
       const status = completionRes.ok ? 500 : completionRes.status || 500;
+      const penalty = completionPenaltyForStatus(status);
+      if (penalty) {
+        await releaseLease(penalty);
+      }
       writeOpenAIError(res, status, detail);
       return;
     }
@@ -396,6 +400,20 @@ function upstreamEmptyOutputDetail(contentFilter, _text, thinking) {
   };
 }
 
+function completionPenaltyForStatus(status) {
+  const value = Number(status) || 0;
+  if (value === 429) {
+    return 'http_429';
+  }
+  if (value === 403) {
+    return 'http_403';
+  }
+  if (value >= 500 && value <= 599) {
+    return 'http_5xx';
+  }
+  return '';
+}
+
 function sendFailedChunk(res, status, message, code) {
   res.write(`data: ${JSON.stringify({
     status_code: status,
@@ -416,4 +434,5 @@ function sendFailedChunk(res, status, message, code) {
 
 module.exports = {
   handleVercelStream,
+  completionPenaltyForStatus,
 };

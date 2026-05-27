@@ -22,6 +22,8 @@ type testingDSMock struct {
 	getPowCalls                int
 	callCompletionCalls        int
 	deleteAllSessionsCalls     int
+	validateTokenCalls         int
+	capabilityCalls            int
 	deleteAllSessionsError     error
 	deleteAllSessionsErrorOnce bool
 }
@@ -62,6 +64,17 @@ func (m *testingDSMock) GetSessionCountForToken(_ context.Context, _ string) (*d
 	return &dsclient.SessionStats{Success: true}, nil
 }
 
+func (m *testingDSMock) ValidateToken(_ context.Context, token string) (*dsclient.TokenValidationResult, error) {
+	m.validateTokenCalls++
+	return &dsclient.TokenValidationResult{Valid: strings.TrimSpace(token) != "", HTTPStatus: http.StatusOK}, nil
+}
+
+func (m *testingDSMock) GetAccountCapabilities(_ context.Context, _ string, _ string) (*dsclient.AccountCapabilities, error) {
+	m.capabilityCalls++
+	vision := true
+	return &dsclient.AccountCapabilities{Vision: &vision, Models: []string{"chat", "vision"}, CheckedAt: 123, Source: "client_settings"}, nil
+}
+
 func TestTestAccount_BatchModeOnlyCreatesSession(t *testing.T) {
 	t.Setenv("DS2API_CONFIG_JSON", `{"accounts":[{"email":"batch@example.com","password":"pwd","token":""}]}`)
 	store := config.LoadStore()
@@ -72,7 +85,7 @@ func TestTestAccount_BatchModeOnlyCreatesSession(t *testing.T) {
 		t.Fatal("expected test account")
 	}
 
-	result := h.testAccount(context.Background(), acc, "deepseek-v4-flash", "")
+	result := h.testAccount(context.Background(), acc, accountTestOptions{Model: "deepseek-v4-flash", Mode: "session"})
 
 	if ok, _ := result["success"].(bool); !ok {
 		t.Fatalf("expected success=true, got %#v", result)
@@ -87,6 +100,9 @@ func TestTestAccount_BatchModeOnlyCreatesSession(t *testing.T) {
 	if ds.getPowCalls != 0 || ds.callCompletionCalls != 0 {
 		t.Fatalf("expected no completion flow calls, got getPow=%d callCompletion=%d", ds.getPowCalls, ds.callCompletionCalls)
 	}
+	if ds.validateTokenCalls != 1 || ds.capabilityCalls != 0 {
+		t.Fatalf("unexpected probe calls: validate=%d capability=%d", ds.validateTokenCalls, ds.capabilityCalls)
+	}
 	updated, ok := store.FindAccount("batch@example.com")
 	if !ok {
 		t.Fatal("expected updated account")
@@ -97,6 +113,77 @@ func TestTestAccount_BatchModeOnlyCreatesSession(t *testing.T) {
 	testStatus, ok := store.AccountTestStatus("batch@example.com")
 	if !ok || testStatus != "ok" {
 		t.Fatalf("expected runtime test status ok, got %q (ok=%v)", testStatus, ok)
+	}
+}
+
+func TestTestAccount_ProbeCapabilitiesStoresRuntimeProbe(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{"accounts":[{"email":"batch@example.com","password":"pwd","token":""}]}`)
+	store := config.LoadStore()
+	ds := &testingDSMock{}
+	h := &Handler{Store: store, DS: ds}
+	acc, ok := store.FindAccount("batch@example.com")
+	if !ok {
+		t.Fatal("expected test account")
+	}
+
+	result := h.testAccount(context.Background(), acc, accountTestOptions{
+		Model:             "deepseek-v4-flash",
+		Mode:              "session",
+		ProbeCapabilities: true,
+	})
+
+	if ok, _ := result["success"].(bool); !ok {
+		t.Fatalf("expected success=true, got %#v", result)
+	}
+	if ds.validateTokenCalls != 1 || ds.capabilityCalls != 1 {
+		t.Fatalf("expected token and capability probe, got validate=%d capability=%d", ds.validateTokenCalls, ds.capabilityCalls)
+	}
+	probe, ok := store.AccountRuntimeProbe("batch@example.com")
+	if !ok {
+		t.Fatal("expected runtime probe cached")
+	}
+	if probe.TokenValid == nil || !*probe.TokenValid {
+		t.Fatalf("expected token valid probe, got %#v", probe)
+	}
+	if probe.Capabilities.Vision == nil || !*probe.Capabilities.Vision {
+		t.Fatalf("expected vision capability, got %#v", probe.Capabilities)
+	}
+	if !containsString(probe.Capabilities.Models, "vision") {
+		t.Fatalf("expected vision model in capability list, got %#v", probe.Capabilities.Models)
+	}
+}
+
+func TestTestAccount_TokenModeOnlyValidatesExistingToken(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{"accounts":[{"email":"batch@example.com","password":"pwd","token":""}]}`)
+	store := config.LoadStore()
+	if err := store.UpdateAccountToken("batch@example.com", "seed-token"); err != nil {
+		t.Fatalf("seed token: %v", err)
+	}
+	ds := &testingDSMock{}
+	h := &Handler{Store: store, DS: ds}
+	acc, ok := store.FindAccount("batch@example.com")
+	if !ok {
+		t.Fatal("expected test account")
+	}
+
+	result := h.testAccount(context.Background(), acc, accountTestOptions{
+		Model:             "deepseek-v4-flash",
+		Mode:              "token",
+		ProbeCapabilities: true,
+	})
+
+	if ok, _ := result["success"].(bool); !ok {
+		t.Fatalf("expected success=true, got %#v", result)
+	}
+	if ds.loginCalls != 0 || ds.createSessionCalls != 0 || ds.getPowCalls != 0 || ds.callCompletionCalls != 0 {
+		t.Fatalf("token mode should not call login/session/completion: login=%d session=%d pow=%d completion=%d", ds.loginCalls, ds.createSessionCalls, ds.getPowCalls, ds.callCompletionCalls)
+	}
+	if ds.validateTokenCalls != 1 || ds.capabilityCalls != 1 {
+		t.Fatalf("expected token and capability probe, got validate=%d capability=%d", ds.validateTokenCalls, ds.capabilityCalls)
+	}
+	msg, _ := result["message"].(string)
+	if !strings.Contains(msg, "Token 验证成功") {
+		t.Fatalf("expected token validation success message, got %q", msg)
 	}
 }
 
@@ -167,6 +254,14 @@ func (m *completionPayloadDSMock) GetSessionCountForToken(_ context.Context, _ s
 	return &dsclient.SessionStats{Success: true}, nil
 }
 
+func (m *completionPayloadDSMock) ValidateToken(_ context.Context, token string) (*dsclient.TokenValidationResult, error) {
+	return &dsclient.TokenValidationResult{Valid: strings.TrimSpace(token) != "", HTTPStatus: http.StatusOK}, nil
+}
+
+func (m *completionPayloadDSMock) GetAccountCapabilities(_ context.Context, _ string, _ string) (*dsclient.AccountCapabilities, error) {
+	return &dsclient.AccountCapabilities{Source: "client_settings"}, nil
+}
+
 func TestTestAccount_MessageModeUsesExpertModelTypeForExpertModel(t *testing.T) {
 	t.Setenv("DS2API_CONFIG_JSON", `{"accounts":[{"email":"batch@example.com","password":"pwd","token":"seed-token"}]}`)
 	store := config.LoadStore()
@@ -177,7 +272,7 @@ func TestTestAccount_MessageModeUsesExpertModelTypeForExpertModel(t *testing.T) 
 		t.Fatal("expected test account")
 	}
 
-	result := h.testAccount(context.Background(), acc, "deepseek-v4-pro", "hello")
+	result := h.testAccount(context.Background(), acc, accountTestOptions{Model: "deepseek-v4-pro", Message: "hello", Mode: "message"})
 
 	if ok, _ := result["success"].(bool); !ok {
 		t.Fatalf("expected success=true, got %#v", result)
@@ -200,7 +295,7 @@ func TestTestAccount_MessageModeUsesVisionModelTypeForVisionModel(t *testing.T) 
 		t.Fatal("expected test account")
 	}
 
-	result := h.testAccount(context.Background(), acc, "deepseek-v4-vision", "hello")
+	result := h.testAccount(context.Background(), acc, accountTestOptions{Model: "deepseek-v4-vision", Message: "hello", Mode: "message"})
 
 	if ok, _ := result["success"].(bool); !ok {
 		t.Fatalf("expected success=true, got %#v", result)
@@ -208,4 +303,13 @@ func TestTestAccount_MessageModeUsesVisionModelTypeForVisionModel(t *testing.T) 
 	if got := ds.payload["model_type"]; got != "vision" {
 		t.Fatalf("expected model_type vision, got %#v", got)
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

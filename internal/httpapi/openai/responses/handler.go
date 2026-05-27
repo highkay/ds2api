@@ -104,10 +104,6 @@ func upstreamEmptyOutputDetail(contentFilter bool, text, thinking string) (int, 
 	return shared.UpstreamEmptyOutputDetail(contentFilter, text, thinking)
 }
 
-func writeUpstreamEmptyOutputError(w http.ResponseWriter, text, thinking string, contentFilter bool) bool {
-	return shared.WriteUpstreamEmptyOutputError(w, text, thinking, contentFilter)
-}
-
 func shouldPenalizeUpstreamEmptyOutput(status int, code string) bool {
 	return shared.ShouldPenalizeUpstreamEmptyOutput(status, code)
 }

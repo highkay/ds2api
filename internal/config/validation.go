@@ -96,6 +96,9 @@ func ValidateRuntimeConfig(runtime RuntimeConfig) error {
 	if err := ValidateIntRange("runtime.token_refresh_interval_hours", runtime.TokenRefreshIntervalHours, 1, 720, false); err != nil {
 		return err
 	}
+	if err := ValidateIntRange("runtime.account_mute_scan_interval_seconds", runtime.AccountMuteScanIntervalSeconds, 30, 604800, false); err != nil {
+		return err
+	}
 	if err := ValidateIntRange("runtime.account_health_recovery_window_seconds", runtime.AccountHealthRecoveryWindowSeconds, 1, 86400, false); err != nil {
 		return err
 	}

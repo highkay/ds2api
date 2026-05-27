@@ -35,6 +35,12 @@ func (m *testingDSMock) DeleteAllSessionsForToken(_ context.Context, _ string) e
 func (m *testingDSMock) GetSessionCountForToken(_ context.Context, _ string) (*dsclient.SessionStats, error) {
 	return &dsclient.SessionStats{}, nil
 }
+func (m *testingDSMock) ValidateToken(_ context.Context, token string) (*dsclient.TokenValidationResult, error) {
+	return &dsclient.TokenValidationResult{Valid: token != "", HTTPStatus: http.StatusOK}, nil
+}
+func (m *testingDSMock) GetAccountCapabilities(_ context.Context, _ string, _ string) (*dsclient.AccountCapabilities, error) {
+	return &dsclient.AccountCapabilities{Source: "client_settings"}, nil
+}
 
 func newHTTPAdminHarness(t *testing.T, rawConfig string, ds adminshared.DeepSeekCaller) http.Handler {
 	t.Helper()

@@ -62,6 +62,7 @@ func runtimeConfigPresent(runtime RuntimeConfig) bool {
 		runtime.AccountMaxQueue > 0 ||
 		runtime.GlobalMaxInflight > 0 ||
 		runtime.TokenRefreshIntervalHours > 0 ||
+		runtime.AccountMuteScanIntervalSeconds > 0 ||
 		runtime.DisableUpstreamFileUploads != nil ||
 		runtime.AccountHealthEnabled != nil ||
 		runtime.AccountHealthRecoveryWindowSeconds > 0 ||

@@ -11,13 +11,14 @@ import (
 )
 
 type Store struct {
-	mu      sync.RWMutex
-	cfg     Config
-	path    string
-	fromEnv bool
-	keyMap  map[string]struct{} // O(1) API key lookup index
-	accMap  map[string]int      // O(1) account lookup: identifier -> slice index
-	accTest map[string]string   // runtime-only account test status cache
+	mu       sync.RWMutex
+	cfg      Config
+	path     string
+	fromEnv  bool
+	keyMap   map[string]struct{} // O(1) API key lookup index
+	accMap   map[string]int      // O(1) account lookup: identifier -> slice index
+	accTest  map[string]string   // runtime-only account test status cache
+	accProbe map[string]AccountRuntimeProbe
 }
 
 func LoadStore() *Store {

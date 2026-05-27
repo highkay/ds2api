@@ -218,7 +218,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
             const res = await apiFetch('/admin/accounts/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ identifier: accountID }),
+                body: JSON.stringify({ identifier: accountID, mode: 'session', probe_capabilities: true }),
             })
             const data = await res.json()
             
@@ -264,7 +264,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
                 const res = await apiFetch('/admin/accounts/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ identifier: id }),
+                    body: JSON.stringify({ identifier: id, mode: 'session', probe_capabilities: true }),
                 })
                 const data = await res.json()
                 results.push({ id, success: data.success, message: data.message, time: data.response_time })

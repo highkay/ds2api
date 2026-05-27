@@ -159,6 +159,15 @@ func (s *Store) RuntimeTokenRefreshIntervalHours() int {
 	return 6
 }
 
+func (s *Store) RuntimeAccountMuteScanIntervalSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.AccountMuteScanIntervalSeconds > 0 {
+		return s.cfg.Runtime.AccountMuteScanIntervalSeconds
+	}
+	return 43200
+}
+
 func (s *Store) UpstreamFileUploadsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

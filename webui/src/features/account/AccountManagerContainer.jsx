@@ -142,6 +142,7 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 searchQuery={searchQuery}
                 onSearchChange={handleSearchChange}
                 envBacked={Boolean(config?.env_backed)}
+                queueStatus={queueStatus}
             />
 
             <AddKeyModal

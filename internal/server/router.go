@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"ds2api/internal/account"
+	"ds2api/internal/account/mutescan"
 	"ds2api/internal/auth"
 	"ds2api/internal/chathistory"
 	"ds2api/internal/config"
@@ -35,6 +36,7 @@ type App struct {
 	Pool     *account.Pool
 	Resolver *auth.Resolver
 	DS       *dsclient.Client
+	MuteScan *mutescan.Scanner
 	Router   http.Handler
 }
 
@@ -53,6 +55,11 @@ func NewApp() (*App, error) {
 		config.Logger.Warn("[PoW] init failed", "error", err)
 	} else {
 		config.Logger.Info("[PoW] pure Go solver ready")
+	}
+	var muteScan *mutescan.Scanner
+	if !config.IsVercel() {
+		interval := time.Duration(store.RuntimeAccountMuteScanIntervalSeconds()) * time.Second
+		muteScan = mutescan.New(store, dsClient, pool, interval)
 	}
 	chatHistoryStore := chathistory.New(config.ChatHistoryPath())
 	if err := chatHistoryStore.Err(); err != nil {
@@ -111,7 +118,14 @@ func NewApp() (*App, error) {
 		http.NotFound(w, req)
 	})
 
-	return &App{Store: store, Pool: pool, Resolver: resolver, DS: dsClient, Router: r}, nil
+	return &App{Store: store, Pool: pool, Resolver: resolver, DS: dsClient, MuteScan: muteScan, Router: r}, nil
+}
+
+func (a *App) StartBackground(ctx context.Context) {
+	if a == nil || a.MuteScan == nil {
+		return
+	}
+	a.MuteScan.Start(ctx)
 }
 
 func timeout(d time.Duration) func(http.Handler) http.Handler {

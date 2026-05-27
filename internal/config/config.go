@@ -169,6 +169,7 @@ type RuntimeConfig struct {
 	AccountMaxQueue                     int   `json:"account_max_queue,omitempty"`
 	GlobalMaxInflight                   int   `json:"global_max_inflight,omitempty"`
 	TokenRefreshIntervalHours           int   `json:"token_refresh_interval_hours,omitempty"`
+	AccountMuteScanIntervalSeconds      int   `json:"account_mute_scan_interval_seconds,omitempty"`
 	DisableUpstreamFileUploads          *bool `json:"disable_upstream_file_uploads,omitempty"`
 	AccountHealthEnabled                *bool `json:"account_health_enabled,omitempty"`
 	AccountHealthRecoveryWindowSeconds  int   `json:"account_health_recovery_window_seconds,omitempty"`

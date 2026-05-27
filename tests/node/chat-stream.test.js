@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
 const handler = require('../../api/chat-stream.js');
-const { handleVercelStream } = require('../../internal/js/chat-stream/vercel_stream.js');
+const { handleVercelStream, completionPenaltyForStatus } = require('../../internal/js/chat-stream/vercel_stream.js');
 const {
   createToolSieveState,
   processToolSieveChunk,
@@ -126,7 +126,7 @@ function releasePayload(fetchCalls) {
   return JSON.parse(Buffer.from(releaseCall.options.body).toString('utf8'));
 }
 
-async function runMockVercelStream(upstreamLines, prepareOverrides = {}) {
+async function runMockVercelStream(upstreamLines, prepareOverrides = {}, options = {}) {
   const originalFetch = global.fetch;
   const fetchURLs = [];
   const fetchCalls = [];
@@ -144,10 +144,10 @@ async function runMockVercelStream(upstreamLines, prepareOverrides = {}) {
     payload: { prompt: 'hello' },
     ...prepareOverrides,
   };
-  global.fetch = async (url, options = {}) => {
+  global.fetch = async (url, fetchOptions = {}) => {
     const textURL = String(url);
     fetchURLs.push(textURL);
-    fetchCalls.push({ url: textURL, options });
+    fetchCalls.push({ url: textURL, options: fetchOptions });
     if (textURL.includes('__stream_prepare=1')) {
       return jsonResponse(prepareBody);
     }
@@ -157,7 +157,7 @@ async function runMockVercelStream(upstreamLines, prepareOverrides = {}) {
     if (textURL.includes('hif-leim.deepseek.com/query')) {
       return jsonResponse({ code: 0, data: { biz_code: 0, biz_data: { value: 'node-hif-value' } } });
     }
-    return sseResponse(upstreamLines);
+    return options.upstreamResponse || sseResponse(upstreamLines);
   };
   try {
     const req = new MockStreamRequest();
@@ -216,6 +216,22 @@ test('vercel stream adds hif-leim header to DeepSeek completion request', async 
   const completionCall = fetchCalls.find((call) => call.url.includes('/api/v0/chat/completion'));
   assert.ok(completionCall);
   assert.equal(completionCall.options.headers['x-hif-leim'], 'node-hif-value');
+});
+
+test('completionPenaltyForStatus maps retryable upstream statuses', () => {
+  assert.equal(completionPenaltyForStatus(429), 'http_429');
+  assert.equal(completionPenaltyForStatus(403), 'http_403');
+  assert.equal(completionPenaltyForStatus(503), 'http_5xx');
+  assert.equal(completionPenaltyForStatus(400), '');
+  assert.equal(completionPenaltyForStatus(0), '');
+});
+
+test('vercel stream penalizes lease on upstream 503 response', async () => {
+  const { res, fetchCalls } = await runMockVercelStream([], {}, {
+    upstreamResponse: new Response('busy', { status: 503 }),
+  });
+  assert.equal(res.statusCode, 503);
+  assert.equal(releasePayload(fetchCalls).penalty, 'http_5xx');
 });
 
 test('resolveToolcallPolicy defaults to feature-match + early emit when prepare flags missing', () => {

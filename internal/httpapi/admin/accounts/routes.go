@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -26,7 +27,11 @@ func RunAccountTestsConcurrently(accounts []config.Account, maxConcurrency int, 
 }
 
 func (h *Handler) TestAccount(ctx context.Context, acc config.Account, model, message string) map[string]any {
-	return h.testAccount(ctx, acc, model, message)
+	opts := accountTestOptions{Model: model, Message: message}
+	if strings.TrimSpace(message) != "" {
+		opts.Mode = "message"
+	}
+	return h.testAccount(ctx, acc, opts)
 }
 
 func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request)  { h.listAccounts(w, r) }

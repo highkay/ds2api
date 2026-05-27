@@ -321,6 +321,38 @@ func TestRuntimeTokenRefreshIntervalHoursUsesConfigValue(t *testing.T) {
 	}
 }
 
+func TestRuntimeAccountMuteScanIntervalSecondsDefaultsToTwelveHours(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["k1"],
+		"accounts":[{"email":"u@example.com","password":"p"}]
+	}`)
+
+	store := LoadStore()
+	if got := store.RuntimeAccountMuteScanIntervalSeconds(); got != 43200 {
+		t.Fatalf("expected default mute scan interval 43200, got %d", got)
+	}
+}
+
+func TestRuntimeAccountMuteScanIntervalSecondsUsesConfigValue(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["k1"],
+		"accounts":[{"email":"u@example.com","password":"p"}],
+		"runtime":{"account_mute_scan_interval_seconds":3600}
+	}`)
+
+	store := LoadStore()
+	if got := store.RuntimeAccountMuteScanIntervalSeconds(); got != 3600 {
+		t.Fatalf("expected configured mute scan interval 3600, got %d", got)
+	}
+}
+
+func TestValidateRuntimeConfigRejectsInvalidMuteScanInterval(t *testing.T) {
+	err := ValidateRuntimeConfig(RuntimeConfig{AccountMuteScanIntervalSeconds: 10})
+	if err == nil || !strings.Contains(err.Error(), "runtime.account_mute_scan_interval_seconds") {
+		t.Fatalf("expected mute scan interval validation error, got %v", err)
+	}
+}
+
 func TestStoreUpdateAccountTokenKeepsIdentifierResolvable(t *testing.T) {
 	t.Setenv("DS2API_CONFIG_JSON", `{
 		"accounts":[{"email":"user@example.com","password":"p"}]
@@ -422,5 +454,59 @@ func TestAccountTestStatusIsRuntimeOnlyAndNotPersisted(t *testing.T) {
 	}
 	if strings.Contains(string(content), "test_status") {
 		t.Fatalf("expected test_status to stay out of persisted config, got: %s", content)
+	}
+}
+
+func TestAccountRuntimeProbeIsRuntimeOnlyAndPreservedAcrossReindex(t *testing.T) {
+	tmp, err := os.CreateTemp(t.TempDir(), "config-*.json")
+	if err != nil {
+		t.Fatalf("create temp config: %v", err)
+	}
+	defer func() { _ = tmp.Close() }()
+	if _, err := tmp.WriteString(`{"accounts":[{"email":"u@example.com","password":"p"}]}`); err != nil {
+		t.Fatalf("write temp config: %v", err)
+	}
+
+	t.Setenv("DS2API_CONFIG_JSON", "")
+	t.Setenv("DS2API_CONFIG_PATH", tmp.Name())
+
+	store := LoadStore()
+	vision := true
+	valid := true
+	probe := AccountRuntimeProbe{
+		TokenValid:      &valid,
+		TokenHTTPStatus: 200,
+		Capabilities: AccountCapabilityProbe{
+			Vision:    &vision,
+			Models:    []string{"chat", "vision"},
+			CheckedAt: 123,
+			Source:    "client_settings",
+		},
+		CheckedAt: 456,
+	}
+	if err := store.UpdateAccountRuntimeProbe("u@example.com", probe); err != nil {
+		t.Fatalf("update runtime probe: %v", err)
+	}
+	if got, ok := store.AccountRuntimeProbe("u@example.com"); !ok || got.TokenValid == nil || !*got.TokenValid {
+		t.Fatalf("expected runtime probe by email, got %#v (ok=%v)", got, ok)
+	}
+
+	if err := store.Update(func(c *Config) error {
+		c.Accounts[0].Remark = "updated"
+		return nil
+	}); err != nil {
+		t.Fatalf("update config: %v", err)
+	}
+	got, ok := store.AccountRuntimeProbe("u@example.com")
+	if !ok || got.Capabilities.Vision == nil || !*got.Capabilities.Vision {
+		t.Fatalf("expected runtime probe to survive reindex, got %#v (ok=%v)", got, ok)
+	}
+
+	content, err := os.ReadFile(tmp.Name())
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if strings.Contains(string(content), "client_settings") || strings.Contains(string(content), "token_valid") {
+		t.Fatalf("expected runtime probe to stay out of persisted config, got: %s", content)
 	}
 }

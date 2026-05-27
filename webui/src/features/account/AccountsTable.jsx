@@ -1,6 +1,19 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Check, Copy, Pencil, Play, Plus, Trash2, FolderX } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Check, Copy, Eye, Loader2, Pencil, Play, Plus, ShieldCheck, Timer, Trash2, FolderX } from 'lucide-react'
 import clsx from 'clsx'
+
+function normalizeID(value) {
+    return String(value || '').trim()
+}
+
+function queueAccountID(item) {
+    return normalizeID(item?.id || item?.account || item?.identifier || item?.email || item?.mobile)
+}
+
+function numberValue(value) {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : 0
+}
 
 export default function AccountsTable({
     t,
@@ -31,6 +44,7 @@ export default function AccountsTable({
     searchQuery,
     onSearchChange,
     envBacked = false,
+    queueStatus,
 }) {
     const [copiedId, setCopiedId] = useState(null)
 
@@ -40,6 +54,13 @@ export default function AccountsTable({
             setTimeout(() => setCopiedId(null), 1500)
         })
     }
+
+    const queueHealthByID = new Map(
+        (queueStatus?.accounts || [])
+            .map(item => [queueAccountID(item), item])
+            .filter(([key]) => key)
+    )
+
     return (
         <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
             <div className="p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -109,11 +130,20 @@ export default function AccountsTable({
                         const assignedProxy = proxies.find(proxy => proxy.id === acc.proxy_id)
                         const runtimeUnknown = envBacked && !acc.test_status
                         const isActive = acc.test_status === 'ok' || acc.has_token
+                        const health = queueHealthByID.get(id) || {}
+                        const capabilities = acc.capabilities || acc.runtime_probe?.capabilities || {}
+                        const tokenValid = acc.token_valid ?? acc.runtime_probe?.token_valid ?? acc.token_status?.valid
+                        const visionCapability = capabilities.vision
+                        const cooldownRemaining = numberValue(health.cooldown_remaining)
+                        const failureCount = numberValue(health.failure_count)
+                        const lastFailureKind = String(health.last_failure_kind || '').trim()
+                        const muted = Boolean(acc.muted || health.muted)
                         return (
                             <div key={i} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-muted/50 transition-colors">
                                 <div className="flex items-center gap-3 min-w-0">
                                     <div className={clsx(
                                         "w-2 h-2 rounded-full shrink-0",
+                                        muted ? "bg-slate-400" :
                                         acc.test_status === 'failed' ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" :
                                         isActive ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" :
                                         runtimeUnknown ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" : "bg-amber-500"
@@ -133,7 +163,7 @@ export default function AccountsTable({
                                         {acc.remark && (
                                             <div className="text-xs text-muted-foreground truncate mt-0.5">{acc.remark}</div>
                                         )}
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5 max-w-full">
                                             <span>{acc.test_status === 'failed' ? t('accountManager.testStatusFailed') : isActive ? t('accountManager.sessionActive') : runtimeUnknown ? t('accountManager.runtimeStatusUnknown') : t('accountManager.reauthRequired')}</span>
                                             {acc.token_preview && (
                                                 <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">
@@ -164,6 +194,50 @@ export default function AccountsTable({
                                                     {t('accountManager.proxyBadge', { name: assignedProxy ? (assignedProxy.name || `${assignedProxy.host}:${assignedProxy.port}`) : acc.proxy_id })}
                                                 </span>
                                             )}
+                                            {(tokenValid === true || tokenValid === false || acc.token_checked_at) && (
+                                                <span className={clsx(
+                                                    "inline-flex items-center gap-1 font-mono px-1.5 py-0.5 rounded text-[10px]",
+                                                    tokenValid === false ? "bg-red-500/10 text-red-500" :
+                                                    tokenValid === true ? "bg-emerald-500/10 text-emerald-500" :
+                                                    "bg-muted text-muted-foreground"
+                                                )}>
+                                                    <ShieldCheck className="w-3 h-3" />
+                                                    {tokenValid === false ? t('accountManager.tokenInvalid') : tokenValid === true ? t('accountManager.tokenValid') : t('accountManager.tokenUnknown')}
+                                                </span>
+                                            )}
+                                            {(visionCapability === true || visionCapability === false || capabilities.checked_at) && (
+                                                <span className={clsx(
+                                                    "inline-flex items-center gap-1 font-mono px-1.5 py-0.5 rounded text-[10px]",
+                                                    visionCapability === true ? "bg-sky-500/10 text-sky-500" :
+                                                    visionCapability === false ? "bg-muted text-muted-foreground" :
+                                                    "bg-muted text-muted-foreground"
+                                                )}>
+                                                    <Eye className="w-3 h-3" />
+                                                    {visionCapability === false ? t('accountManager.visionUnavailable') : visionCapability === true ? t('accountManager.visionAvailable') : t('accountManager.visionUnknown')}
+                                                </span>
+                                            )}
+                                            {cooldownRemaining > 0 && (
+                                                <span className="inline-flex items-center gap-1 font-mono bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded text-[10px]">
+                                                    <Timer className="w-3 h-3" />
+                                                    {t('accountManager.cooldownSeconds', { seconds: cooldownRemaining })}
+                                                </span>
+                                            )}
+                                            {failureCount > 0 && (
+                                                <span className="inline-flex items-center gap-1 font-mono bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded text-[10px]">
+                                                    <AlertTriangle className="w-3 h-3" />
+                                                    {t('accountManager.failureCount', { count: failureCount })}
+                                                </span>
+                                            )}
+                                            {lastFailureKind && (
+                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">
+                                                    {t('accountManager.lastFailureKind', { kind: lastFailureKind })}
+                                                </span>
+                                            )}
+                                            {muted && (
+                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">
+                                                    {t('accountManager.muted')}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -192,9 +266,10 @@ export default function AccountsTable({
                                     <button
                                         onClick={() => onTestAccount(id)}
                                         disabled={testing[id]}
-                                        className="px-2 lg:px-3 py-1 lg:py-1.5 text-[10px] lg:text-xs font-medium border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50"
+                                        className="inline-flex items-center gap-1 px-2 lg:px-3 py-1 lg:py-1.5 text-[10px] lg:text-xs font-medium border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50"
                                     >
-                                        {testing[id] ? t('actions.testing') : t('actions.test')}
+                                        {testing[id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                                        <span>{testing[id] ? t('actions.testing') : t('actions.test')}</span>
                                     </button>
                                     <button
                                         onClick={() => onDeleteAccount(id)}

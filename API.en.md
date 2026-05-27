@@ -717,6 +717,8 @@ Reads runtime settings and status, including:
 - `env_backed`, `needs_vercel_sync`
 - `toolcall` policy is fixed to `feature_match + high` and is no longer returned or editable via settings
 
+> `runtime.account_mute_scan_interval_seconds` is a config-file field, not a hot-updated `/admin/settings` field. It controls the local long-running background `/api/v0/users/current` mute scan interval, defaults to `43200` seconds, and does not run on Vercel Serverless.
+
 ### `PUT /admin/settings`
 
 Hot-updates runtime settings. Supported fields:
@@ -755,6 +757,8 @@ Imports full config with:
 The request can send config directly, or wrapped as `{"config": {...}, "mode":"merge"}`.
 Query params `?mode=merge` / `?mode=replace` are also supported.
 `replace` mode replaces the full config shape while preserving Vercel sync metadata. `merge` mode merges `keys`, `api_keys`, `accounts`, and `model_aliases`, and overwrites non-empty fields under `admin`, `runtime`, `responses`, and `embeddings`. Manage `compat`, `auto_delete`, and `history_split` via `/admin/settings` or the config file; legacy `toolcall` fields are ignored.
+
+`merge` mode persists a non-zero `runtime.account_mute_scan_interval_seconds`, but changing that scan interval still requires restarting the local process before the background task uses it.
 
 > Note: `merge` mode does not update `compat`, `auto_delete`, or `history_split`.
 

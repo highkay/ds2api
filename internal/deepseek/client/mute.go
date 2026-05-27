@@ -26,12 +26,30 @@ func extractMuteInfo(resp map[string]any) muteInfo {
 	_, bizCode, msg, bizMsg := extractResponseStatus(resp)
 	data, _ := resp["data"].(map[string]any)
 	bizData, _ := data["biz_data"].(map[string]any)
-	isMuted := intFrom(bizData["is_muted"]) == 1
+	chat, _ := bizData["chat"].(map[string]any)
+	isMuted := muteFlagFrom(bizData["is_muted"]) || muteFlagFrom(chat["is_muted"])
+	muteUntil := floatFrom(bizData["mute_until"])
+	if muteUntil == 0 {
+		muteUntil = floatFrom(chat["mute_until"])
+	}
 	combined := strings.ToLower(strings.TrimSpace(msg) + " " + strings.TrimSpace(bizMsg))
-	if bizCode == 5 || isMuted || strings.Contains(combined, "muted") {
-		return muteInfo{Muted: true, Until: floatFrom(bizData["mute_until"])}
+	if bizCode == 5 || isMuted || strings.Contains(combined, "muted") || strings.Contains(combined, "禁言") {
+		return muteInfo{Muted: true, Until: muteUntil}
 	}
 	return muteInfo{}
+}
+
+func muteFlagFrom(v any) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		switch strings.ToLower(strings.TrimSpace(x)) {
+		case "true", "1", "yes":
+			return true
+		}
+	}
+	return intFrom(v) == 1
 }
 
 func floatFrom(v any) float64 {

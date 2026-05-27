@@ -29,6 +29,10 @@ func main() {
 		config.Logger.Error("server initialization failed", "error", err)
 		os.Exit(1)
 	}
+	backgroundCtx, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	app.StartBackground(backgroundCtx)
+
 	port := strings.TrimSpace(os.Getenv("PORT"))
 	if port == "" {
 		port = "5001"
@@ -64,6 +68,7 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	sig := <-quit
 	config.Logger.Info("shutdown signal received", "signal", sig.String())
+	stopBackground()
 
 	// Graceful shutdown: allow up to 10 seconds for in-flight requests to complete.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -60,7 +60,7 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 	for _, acc := range accounts[start:end] {
 		testStatus, _ := h.Store.AccountTestStatus(acc.Identifier())
 		token := strings.TrimSpace(acc.Token)
-		items = append(items, map[string]any{
+		item := map[string]any{
 			"identifier":    acc.Identifier(),
 			"name":          acc.Name,
 			"remark":        acc.Remark,
@@ -75,7 +75,18 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 			"muted":         acc.IsMuted(now),
 			"mute_until":    acc.MuteUntil,
 			"last_used":     acc.LastUsed,
-		})
+		}
+		if probe, ok := h.Store.AccountRuntimeProbe(acc.Identifier()); ok {
+			item["runtime_probe"] = runtimeProbeResponseMap(probe)
+			item["token_valid"] = boolPtrValue(probe.TokenValid)
+			item["token_checked_at"] = probe.CheckedAt
+			item["token_status"] = tokenStatusResponseMap(probe)
+			item["capabilities"] = capabilityProbeResponseMap(probe.Capabilities)
+			if probe.CapabilityError != "" {
+				item["capability_error"] = probe.CapabilityError
+			}
+		}
+		items = append(items, item)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total, "page": page, "page_size": pageSize, "total_pages": totalPages})
 }

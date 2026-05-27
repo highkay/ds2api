@@ -18,6 +18,8 @@ type ConfigStore interface {
 	UpdateAccountToken(identifier, token string) error
 	UpdateAccountTestStatus(identifier, status string) error
 	AccountTestStatus(identifier string) (string, bool)
+	UpdateAccountRuntimeProbe(identifier string, probe config.AccountRuntimeProbe) error
+	AccountRuntimeProbe(identifier string) (config.AccountRuntimeProbe, bool)
 	Update(mutator func(*config.Config) error) error
 	ExportJSONAndBase64() (string, string, error)
 	IsEnvBacked() bool
@@ -68,6 +70,8 @@ type DeepSeekCaller interface {
 	CallCompletion(ctx context.Context, a *auth.RequestAuth, payload map[string]any, powResp string, maxAttempts int) (*http.Response, error)
 	GetSessionCountForToken(ctx context.Context, token string) (*dsclient.SessionStats, error)
 	DeleteAllSessionsForToken(ctx context.Context, token string) error
+	ValidateToken(ctx context.Context, token string) (*dsclient.TokenValidationResult, error)
+	GetAccountCapabilities(ctx context.Context, token string, accountID string) (*dsclient.AccountCapabilities, error)
 }
 
 var _ ConfigStore = (*config.Store)(nil)

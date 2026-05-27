@@ -65,6 +65,7 @@
     "account_max_queue": 0,
     "global_max_inflight": 0,
     "token_refresh_interval_hours": 6,
+    "account_mute_scan_interval_seconds": 43200,
     "disable_upstream_file_uploads": false,
     "account_health_enabled": true,
     "account_health_recovery_window_seconds": 300,

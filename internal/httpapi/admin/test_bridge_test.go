@@ -82,6 +82,14 @@ func (m *testingDSMock) GetSessionCountForToken(_ context.Context, _ string) (*d
 	return &dsclient.SessionStats{}, nil
 }
 
+func (m *testingDSMock) ValidateToken(_ context.Context, token string) (*dsclient.TokenValidationResult, error) {
+	return &dsclient.TokenValidationResult{Valid: token != "", HTTPStatus: http.StatusOK}, nil
+}
+
+func (m *testingDSMock) GetAccountCapabilities(_ context.Context, _ string, _ string) (*dsclient.AccountCapabilities, error) {
+	return &dsclient.AccountCapabilities{Source: "client_settings"}, nil
+}
+
 func (h *Handler) configHandler() *adminconfig.Handler {
 	return &adminconfig.Handler{Store: h.Store, Pool: h.Pool, DS: h.DS, OpenAI: h.OpenAI, ChatHistory: h.ChatHistory}
 }
