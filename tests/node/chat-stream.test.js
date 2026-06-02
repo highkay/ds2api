@@ -29,6 +29,8 @@ const {
   isNodeStreamSupportedPath,
   extractPathname,
   trimContinuationOverlap,
+  createLeakedToolResultSectionFilter,
+  sanitizeLeakedOutputText,
 } = handler.__test;
 
 function createMockResponse() {
@@ -175,6 +177,28 @@ test('chat-stream exposes parser test hooks', () => {
   assert.equal(typeof resolveToolcallPolicy, 'function');
 });
 
+test('sanitizeLeakedOutputText removes assistant tool-call markers', () => {
+  const got = sanitizeLeakedOutputText('A<| Assistant_END_OF_TOOL_CALLS |>B<| end_of_tool_calls |>C');
+  assert.equal(got, 'ABC');
+});
+
+test('leaked tool result filter strips sections across chunks', () => {
+  const filter = createLeakedToolResultSectionFilter();
+  const got = [
+    'before <|Tool|>{"content":"secret"',
+    ',"tool_call_id":"call_1"}',
+    '<|end_of_toolresults|> after',
+  ].map((chunk) => filter.apply(chunk)).join('');
+  assert.equal(got, 'before  after');
+});
+
+test('leaked tool result filter supports fullwidth markers', () => {
+  const filter = createLeakedToolResultSectionFilter();
+  const got = filter.apply('A<｜Tool｜>{"content":"secret"}') +
+    filter.apply('<｜end▁of▁toolresults｜>B');
+  assert.equal(got, 'AB');
+});
+
 test('vercel stream emits Go-parity empty-output failure on DONE', async () => {
   const { frames, fetchCalls } = await runMockVercelStream(['data: [DONE]\n\n']);
   assert.equal(frames.length, 2);
@@ -206,6 +230,24 @@ test('vercel stream keeps stop finish when content_filter arrives after visible 
   assert.equal(parsed[0].choices[0].delta.content, 'hello');
   assert.equal(parsed[1].choices[0].finish_reason, 'stop');
   assert.equal(parsed[1].usage.completion_tokens, 1);
+});
+
+test('vercel stream strips leaked tool result sections across chunks', async () => {
+  const { frames } = await runMockVercelStream([
+    'data: {"p":"response/content","v":"before <|Tool|>{\\"content\\":\\"secret\\""}\n\n',
+    'data: {"p":"response/content","v":",\\"tool_call_id\\":\\"call_1\\"}<|end_of_toolresults|> after"}\n\n',
+    'data: [DONE]\n\n',
+  ]);
+  const content = frames
+    .filter((frame) => frame !== '[DONE]')
+    .map((frame) => JSON.parse(frame))
+    .map((chunk) => chunk.choices && chunk.choices[0] && chunk.choices[0].delta)
+    .filter((delta) => delta && delta.content)
+    .map((delta) => delta.content)
+    .join('');
+  assert.equal(content, 'before  after');
+  assert.equal(content.includes('secret'), false);
+  assert.equal(content.includes('tool_call_id'), false);
 });
 
 test('vercel stream adds hif-leim header to DeepSeek completion request', async () => {

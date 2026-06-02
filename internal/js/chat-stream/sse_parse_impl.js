@@ -7,13 +7,89 @@ const {
   SKIP_EXACT_PATHS,
 } = require('../shared/deepseek-constants');
 
-
+const emptyJSONFencePattern = /```json\s*```/gi;
+const leakedToolCallArrayPattern =
+  /\[\{\s*"function"\s*:\s*\{[\s\S]*?\}\s*,\s*"id"\s*:\s*"call[^"]*"\s*,\s*"type"\s*:\s*"function"\s*}\]/gi;
+const leakedToolResultOpenMarkerPattern = /<\s*[\|\uFF5C]\s*tool\s*[\|\uFF5C]\s*>/i;
+const leakedToolResultCloseMarkerPattern =
+  /<\s*[\|\uFF5C]\s*end[_▁]of[_▁]tool[_▁]?results\s*[\|\uFF5C]\s*>/i;
+const leakedToolResultSectionPattern =
+  /<\s*[\|\uFF5C]\s*tool\s*[\|\uFF5C]\s*>[\s\S]*?<\s*[\|\uFF5C]\s*end[_▁]of[_▁]tool[_▁]?results\s*[\|\uFF5C]\s*>/gi;
+const leakedToolResultBlobPattern =
+  /<\s*\|\s*tool\s*\|\s*>\s*\{[\s\S]*?"tool_call_id"\s*:\s*"call[^"]*"\s*}/gi;
+const leakedThinkTagPattern = /<\/?\s*think\s*>/gi;
+const leakedBOSMarkerPattern = /<\s*[\|\uFF5C]\s*begin[_▁]of[_▁]sentence\s*[\|\uFF5C]\s*>/gi;
+const leakedMetaMarkerSource =
+  String.raw`<\s*[\|\uFF5C]\s*(?:assistant(?:[_▁]end[_▁]of[_▁]tool[_▁]?calls)?|` +
+  String.raw`tool|end[_▁]of[_▁]sentence|end[_▁]of[_▁]thinking|` +
+  String.raw`end[_▁]of[_▁]tool[_▁]?results|end[_▁]of[_▁]tool[_▁]?calls|` +
+  String.raw`end[_▁]of[_▁]instructions)\s*[\|\uFF5C]\s*>`;
+const leakedMetaMarkerPattern = new RegExp(leakedMetaMarkerSource, 'gi');
 
 function stripThinkTags(text) {
   if (typeof text !== 'string' || !text) {
     return text;
   }
   return text.replace(/<\/?\s*think\s*>/gi, '');
+}
+
+function createLeakedToolResultSectionFilter() {
+  return {
+    inside: false,
+    apply(text) {
+      return stripLeakedToolResultSectionsDelta(text, this);
+    },
+  };
+}
+
+function stripLeakedToolResultSectionsDelta(text, state) {
+  if (typeof text !== 'string' || text === '') {
+    return text;
+  }
+  const filterState = state || { inside: false };
+  let pos = 0;
+  let out = '';
+  while (pos < text.length) {
+    if (filterState.inside) {
+      const closeMatch = leakedToolResultCloseMarkerPattern.exec(text.slice(pos));
+      if (!closeMatch) {
+        return out;
+      }
+      filterState.inside = false;
+      pos += closeMatch.index + closeMatch[0].length;
+      continue;
+    }
+
+    const openMatch = leakedToolResultOpenMarkerPattern.exec(text.slice(pos));
+    if (!openMatch) {
+      return pos === 0 ? text : out + text.slice(pos);
+    }
+
+    const start = pos + openMatch.index;
+    const openEnd = start + openMatch[0].length;
+    out += text.slice(pos, start);
+    const closeMatch = leakedToolResultCloseMarkerPattern.exec(text.slice(openEnd));
+    if (!closeMatch) {
+      filterState.inside = true;
+      return out;
+    }
+    pos = openEnd + closeMatch.index + closeMatch[0].length;
+  }
+  return out;
+}
+
+function sanitizeLeakedOutputText(text) {
+  if (typeof text !== 'string' || text === '') {
+    return text;
+  }
+  return text
+    .replace(emptyJSONFencePattern, '')
+    .replace(leakedToolCallArrayPattern, '')
+    .replace(leakedToolResultSectionPattern, '')
+    .replace(leakedToolResultBlobPattern, '')
+    .replace(leakedThinkTagPattern, '')
+    .replace(leakedBOSMarkerPattern, '')
+    .replace(leakedMetaMarkerPattern, '');
 }
 
 function splitThinkingParts(parts) {
@@ -633,4 +709,7 @@ module.exports = {
   isCitation,
   stripReferenceMarkers: stripReferenceMarkersText,
   stripThinkTags,
+  createLeakedToolResultSectionFilter,
+  stripLeakedToolResultSectionsDelta,
+  sanitizeLeakedOutputText,
 };

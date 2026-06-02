@@ -6,7 +6,13 @@ import (
 )
 
 var emptyJSONFencePattern = regexp.MustCompile("(?is)```json\\s*```")
-var leakedToolCallArrayPattern = regexp.MustCompile(`(?is)\[\{\s*"function"\s*:\s*\{[\s\S]*?\}\s*,\s*"id"\s*:\s*"call[^"]*"\s*,\s*"type"\s*:\s*"function"\s*}\]`)
+var leakedToolCallArrayPattern = regexp.MustCompile(
+	`(?is)\[\{\s*"function"\s*:\s*\{[\s\S]*?\}\s*,\s*` +
+		`"id"\s*:\s*"call[^"]*"\s*,\s*"type"\s*:\s*"function"\s*}\]`,
+)
+var leakedToolResultOpenMarkerPattern = regexp.MustCompile(`(?is)<\s*[｜\|]\s*tool\s*[｜\|]\s*>`)
+var leakedToolResultCloseMarkerPattern = regexp.MustCompile(`(?is)<\s*[｜\|]\s*end[_▁]of[_▁]tool[_▁]?results\s*[｜\|]\s*>`)
+var leakedToolResultSectionPattern = regexp.MustCompile(`(?is)<\s*[｜\|]\s*tool\s*[｜\|]\s*>[\s\S]*?<\s*[｜\|]\s*end[_▁]of[_▁]tool[_▁]?results\s*[｜\|]\s*>`)
 var leakedToolResultBlobPattern = regexp.MustCompile(`(?is)<\s*\|\s*tool\s*\|\s*>\s*\{[\s\S]*?"tool_call_id"\s*:\s*"call[^"]*"\s*}`)
 
 var leakedThinkTagPattern = regexp.MustCompile(`(?is)</?\s*think\s*>`)
@@ -17,9 +23,14 @@ var leakedThinkTagPattern = regexp.MustCompile(`(?is)</?\s*think\s*>`)
 var leakedBOSMarkerPattern = regexp.MustCompile(`(?i)<[｜\|]\s*begin[_▁]of[_▁]sentence\s*[｜\|]>`)
 
 // leakedMetaMarkerPattern matches the remaining DeepSeek special tokens in BOTH forms:
-//   - ASCII underscore: <｜end_of_sentence｜>, <｜end_of_toolresults｜>, <｜end_of_instructions｜>
+//   - ASCII underscore: <｜end_of_sentence｜>, <｜end_of_toolresults｜>, <｜end_of_tool_calls｜>
 //   - U+2581 variant:   <｜end▁of▁sentence｜>, <｜end▁of▁toolresults｜>, <｜end▁of▁instructions｜>
-var leakedMetaMarkerPattern = regexp.MustCompile(`(?i)<[｜\|]\s*(?:assistant|tool|end[_▁]of[_▁]sentence|end[_▁]of[_▁]thinking|end[_▁]of[_▁]toolresults|end[_▁]of[_▁]instructions)\s*[｜\|]>`)
+var leakedMetaMarkerPattern = regexp.MustCompile(
+	`(?i)<\s*[｜\|]\s*(?:assistant(?:[_▁]end[_▁]of[_▁]tool[_▁]?calls)?|` +
+		`tool|end[_▁]of[_▁]sentence|end[_▁]of[_▁]thinking|` +
+		`end[_▁]of[_▁]tool[_▁]?results|end[_▁]of[_▁]tool[_▁]?calls|` +
+		`end[_▁]of[_▁]instructions)\s*[｜\|]\s*>`,
+)
 
 // leakedAgentXMLBlockPatterns catch agent-style XML blocks that leak through
 // when the sieve fails to capture them. These are applied only to complete
@@ -36,12 +47,70 @@ var leakedAgentWrapperPlusResultOpenPattern = regexp.MustCompile(`(?is)<(?:attem
 var leakedAgentResultPlusWrapperClosePattern = regexp.MustCompile(`(?is)</result>\s*</(?:attempt_completion|ask_followup_question|new_task)\b[^>]*>`)
 var leakedAgentResultTagPattern = regexp.MustCompile(`(?is)</?result>`)
 
+type LeakedToolResultSectionFilter struct {
+	inside bool
+}
+
+func (f *LeakedToolResultSectionFilter) Apply(text string) string {
+	if text == "" {
+		return text
+	}
+	if f == nil {
+		return StripLeakedToolResultSectionsDelta(text, nil)
+	}
+	return StripLeakedToolResultSectionsDelta(text, &f.inside)
+}
+
+func StripLeakedToolResultSectionsDelta(text string, inside *bool) string {
+	if text == "" {
+		return text
+	}
+	localInside := false
+	if inside == nil {
+		inside = &localInside
+	}
+	pos := 0
+	var out strings.Builder
+	for pos < len(text) {
+		if *inside {
+			closeLoc := leakedToolResultCloseMarkerPattern.FindStringIndex(text[pos:])
+			if closeLoc == nil {
+				return out.String()
+			}
+			*inside = false
+			pos += closeLoc[1]
+			continue
+		}
+
+		openLoc := leakedToolResultOpenMarkerPattern.FindStringIndex(text[pos:])
+		if openLoc == nil {
+			if pos == 0 {
+				return text
+			}
+			out.WriteString(text[pos:])
+			break
+		}
+
+		start := pos + openLoc[0]
+		openEnd := pos + openLoc[1]
+		out.WriteString(text[pos:start])
+		closeLoc := leakedToolResultCloseMarkerPattern.FindStringIndex(text[openEnd:])
+		if closeLoc == nil {
+			*inside = true
+			break
+		}
+		pos = openEnd + closeLoc[1]
+	}
+	return out.String()
+}
+
 func sanitizeLeakedOutput(text string) string {
 	if text == "" {
 		return text
 	}
 	out := emptyJSONFencePattern.ReplaceAllString(text, "")
 	out = leakedToolCallArrayPattern.ReplaceAllString(out, "")
+	out = leakedToolResultSectionPattern.ReplaceAllString(out, "")
 	out = leakedToolResultBlobPattern.ReplaceAllString(out, "")
 	out = stripDanglingThinkSuffix(out)
 	out = leakedThinkTagPattern.ReplaceAllString(out, "")

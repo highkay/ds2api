@@ -11,17 +11,32 @@ func TestSanitizeLeakedOutputRemovesEmptyJSONFence(t *testing.T) {
 }
 
 func TestSanitizeLeakedOutputRemovesLeakedWireToolCallAndResult(t *testing.T) {
-	raw := "开始\n[{\"function\":{\"arguments\":\"{\\\"command\\\":\\\"java -version\\\"}\",\"name\":\"exec\"},\"id\":\"callb9a321\",\"type\":\"function\"}]< | Tool | >{\"content\":\"openjdk version 21\",\"tool_call_id\":\"callb9a321\"}\n结束"
+	raw := "开始\n" +
+		`[{"function":{"arguments":"{\"command\":\"java -version\"}","name":"exec"},` +
+		`"id":"callb9a321","type":"function"}]` +
+		`< | Tool | >{"content":"openjdk version 21","tool_call_id":"callb9a321"}` +
+		"\n结束"
 	got := sanitizeLeakedOutput(raw)
 	if got != "开始\n\n结束" {
 		t.Fatalf("unexpected sanitize result for leaked wire format: %q", got)
 	}
 }
 
-func TestSanitizeLeakedOutputRemovesStandaloneMetaMarkers(t *testing.T) {
-	raw := "A<| end_of_sentence |><| Assistant |>B<| end_of_thinking |>C<｜end▁of▁thinking｜>D<｜end▁of▁sentence｜>E<| end_of_toolresults |>F<｜end▁of▁instructions｜>G"
+func TestSanitizeLeakedOutputRemovesToolResultSection(t *testing.T) {
+	raw := "开始<|Tool|>{\"content\":\"secret\",\"tool_call_id\":\"call_1\"}<|end_of_toolresults|>结束"
 	got := sanitizeLeakedOutput(raw)
-	if got != "ABCDEFG" {
+	if got != "开始结束" {
+		t.Fatalf("unexpected sanitize result for leaked tool result section: %q", got)
+	}
+}
+
+func TestSanitizeLeakedOutputRemovesStandaloneMetaMarkers(t *testing.T) {
+	raw := "A<| end_of_sentence |><| Assistant |>B<| end_of_thinking |>C" +
+		"<｜end▁of▁thinking｜>D<｜end▁of▁sentence｜>E<| end_of_toolresults |>F" +
+		"<｜end▁of▁instructions｜>G<| Assistant_END_OF_TOOL_CALLS |>H" +
+		"<| end_of_tool_calls |>I"
+	got := sanitizeLeakedOutput(raw)
+	if got != "ABCDEFGHI" {
 		t.Fatalf("unexpected sanitize result for meta markers: %q", got)
 	}
 }

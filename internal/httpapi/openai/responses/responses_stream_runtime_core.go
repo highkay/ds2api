@@ -7,6 +7,7 @@ import (
 
 	"ds2api/internal/config"
 	openaifmt "ds2api/internal/format/openai"
+	openaiShared "ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
@@ -38,6 +39,7 @@ type responsesStreamRuntime struct {
 	thinking          strings.Builder
 	text              strings.Builder
 	visibleText       strings.Builder
+	leakedToolResult  openaiShared.LeakedToolResultSectionFilter
 	streamToolCallIDs map[int]string
 	functionItemIDs   map[int]string
 	functionOutputIDs map[int]int
@@ -198,7 +200,8 @@ func (s *responsesStreamRuntime) onParsed(parsed sse.LineResult) streamengine.Pa
 
 	contentSeen := false
 	for _, p := range parsed.Parts {
-		cleanedText := cleanVisibleOutput(p.Text, s.stripReferenceMarkers)
+		filteredText := s.leakedToolResult.Apply(p.Text)
+		cleanedText := cleanVisibleOutput(filteredText, s.stripReferenceMarkers)
 		if cleanedText == "" {
 			continue
 		}

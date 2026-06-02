@@ -11,6 +11,9 @@ const {
   extractAccumulatedTokenUsage,
   shouldSkipPath,
   stripReferenceMarkers,
+  createLeakedToolResultSectionFilter,
+  stripLeakedToolResultSectionsDelta,
+  sanitizeLeakedOutputText,
 } = require('./sse_parse');
 const {
   resolveToolcallPolicy,
@@ -122,6 +125,9 @@ module.exports.__test = {
   filterLeakedContentFilterParts,
   hasContentFilterStatus,
   extractAccumulatedTokenUsage,
+  createLeakedToolResultSectionFilter,
+  stripLeakedToolResultSectionsDelta,
+  sanitizeLeakedOutputText,
   isNodeStreamSupportedPath,
   extractPathname,
   trimContinuationOverlap,

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	openaifmt "ds2api/internal/format/openai"
+	openaiShared "ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
 	"ds2api/internal/toolstream"
@@ -38,6 +39,7 @@ type chatStreamRuntime struct {
 	streamToolNames   map[int]string
 	thinking          strings.Builder
 	text              strings.Builder
+	leakedToolResult  openaiShared.LeakedToolResultSectionFilter
 
 	finalThinking     string
 	finalText         string
@@ -239,7 +241,8 @@ func (s *chatStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedD
 	newChoices := make([]map[string]any, 0, len(parsed.Parts))
 	contentSeen := false
 	for _, p := range parsed.Parts {
-		cleanedText := cleanVisibleOutput(p.Text, s.stripReferenceMarkers)
+		filteredText := s.leakedToolResult.Apply(p.Text)
+		cleanedText := cleanVisibleOutput(filteredText, s.stripReferenceMarkers)
 		if s.searchEnabled && sse.IsCitation(cleanedText) {
 			continue
 		}

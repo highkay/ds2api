@@ -11,7 +11,12 @@ const {
 } = require('../helpers/stream-tool-sieve');
 const { BASE_HEADERS } = require('../shared/deepseek-constants');
 const { writeOpenAIError, openAIErrorType } = require('./error_shape');
-const { parseChunkForContent, isCitation } = require('./sse_parse');
+const {
+  parseChunkForContent,
+  isCitation,
+  createLeakedToolResultSectionFilter,
+  sanitizeLeakedOutputText,
+} = require('./sse_parse');
 const { buildUsage } = require('./token_usage');
 const {
   resolveToolcallPolicy,
@@ -140,6 +145,7 @@ async function handleVercelStream(req, res, rawBody, payload) {
     let currentType = thinkingEnabled ? 'thinking' : 'text';
     let thinkingText = '';
     let outputText = '';
+    const leakedToolResultFilter = createLeakedToolResultSectionFilter();
     const toolSieveEnabled = toolPolicy.toolSieveEnabled;
     const toolSieveState = createToolSieveState();
     let toolCallsEmitted = false;
@@ -270,12 +276,15 @@ async function handleVercelStream(req, res, rawBody, payload) {
           }
 
           for (const p of parsed.parts) {
-            if (!p.text) {
+            const cleanedText = sanitizeLeakedOutputText(
+              leakedToolResultFilter.apply(p.text),
+            );
+            if (!cleanedText) {
               continue;
             }
             if (p.type === 'thinking') {
               if (thinkingEnabled) {
-                const trimmed = trimContinuationOverlap(thinkingText, p.text);
+                const trimmed = trimContinuationOverlap(thinkingText, cleanedText);
                 if (!trimmed) {
                   continue;
                 }
@@ -283,7 +292,7 @@ async function handleVercelStream(req, res, rawBody, payload) {
                 sendDeltaFrame({ reasoning_content: trimmed });
               }
             } else {
-              const trimmed = trimContinuationOverlap(outputText, p.text);
+              const trimmed = trimContinuationOverlap(outputText, cleanedText);
               if (!trimmed) {
                 continue;
               }
