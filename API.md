@@ -718,6 +718,8 @@ data: {"type":"message_stop"}
 - `env_backed`、`needs_vercel_sync`
 - `toolcall` 策略已固定为 `feature_match + high`，不再通过 settings 返回或修改
 
+默认情况下，`runtime.account_max_inflight=1`、`runtime.account_max_queue=0`。`account_max_queue=0` 表示禁用等待队列；当所有账号并发槽位占满时，请求会直接返回 HTTP `429`，OpenAI 兼容响应的 `error.code` 为 `account_pool_busy`。
+
 > `runtime.account_mute_scan_interval_seconds` 是配置文件字段，不属于 `/admin/settings` 热更新范围。它控制本地长进程后台 `/api/v0/users/current` 禁言扫描间隔，默认 `43200` 秒；Vercel Serverless 不运行该后台扫描器。
 
 ### `PUT /admin/settings`
@@ -758,6 +760,8 @@ data: {"type":"message_stop"}
 请求可直接传配置对象，或使用 `{"config": {...}, "mode":"merge"}` 包裹格式。
 也支持在查询参数里传 `?mode=merge` / `?mode=replace`。
 `replace` 模式会按完整配置结构替换（保留 Vercel 同步元信息）；`merge` 模式会合并 `keys`、`api_keys`、`accounts`、`model_aliases`，并覆盖 `admin`、`runtime`、`responses`、`embeddings` 中的非空字段。`compat`、`auto_delete`、`history_split` 建议通过 `/admin/settings` 或配置文件管理；`toolcall` 相关字段会被忽略。
+
+`merge` 模式下，`runtime.account_max_queue=0` 是显式值，会覆盖已有队列上限。
 
 `merge` 模式会把非零 `runtime.account_mute_scan_interval_seconds` 写入配置，但该扫描间隔仍需重启本地进程后才会影响后台任务。
 

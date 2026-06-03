@@ -11,7 +11,7 @@ func validateMergedRuntimeSettings(current config.RuntimeConfig, incoming *confi
 		if incoming.AccountMaxInflight > 0 {
 			merged.AccountMaxInflight = incoming.AccountMaxInflight
 		}
-		if incoming.AccountMaxQueue > 0 {
+		if incoming.AccountMaxQueue >= 0 {
 			merged.AccountMaxQueue = incoming.AccountMaxQueue
 		}
 		if incoming.GlobalMaxInflight > 0 {

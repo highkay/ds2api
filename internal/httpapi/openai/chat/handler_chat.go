@@ -30,12 +30,11 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	a, err := h.Auth.Determine(r)
 	if err != nil {
-		status := http.StatusUnauthorized
-		detail := err.Error()
 		if err == auth.ErrNoAccount {
-			status = http.StatusTooManyRequests
+			writeOpenAIAccountPoolBusyError(w)
+			return
 		}
-		writeOpenAIError(w, status, detail)
+		writeOpenAIError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	var sessionID string

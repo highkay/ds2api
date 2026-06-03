@@ -255,8 +255,8 @@ VERCEL_TEAM_ID=team_xxxxxxxxxxxx   # 个人账号可留空
 
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
-| `DS2API_ACCOUNT_MAX_INFLIGHT` | 每账号并发上限 | `2` |
-| `DS2API_ACCOUNT_MAX_QUEUE` | 等待队列上限 | `recommended_concurrency` |
+| `DS2API_ACCOUNT_MAX_INFLIGHT` | 每账号并发上限 | `1` |
+| `DS2API_ACCOUNT_MAX_QUEUE` | 等待队列上限 | `0` |
 | `DS2API_GLOBAL_MAX_INFLIGHT` | 全局并发上限 | `recommended_concurrency` |
 | `DS2API_ENV_WRITEBACK` | 检测到 `DS2API_CONFIG_JSON` 时自动写入 `DS2API_CONFIG_PATH`，并在成功后转为文件模式（`1/true/yes/on`） | 关闭 |
 | `DS2API_VERCEL_INTERNAL_SECRET` | 混合流式内部鉴权 | 回退用 `DS2API_ADMIN_KEY` |
@@ -267,12 +267,15 @@ VERCEL_TEAM_ID=team_xxxxxxxxxxxx   # 个人账号可留空
 | `VERCEL_TEAM_ID` | Vercel 团队 ID | — |
 | `DS2API_VERCEL_PROTECTION_BYPASS` | 部署保护绕过密钥（内部 Node→Go 调用） | — |
 
+默认策略是每个 DeepSeek 账号同时只处理 1 个请求，等待队列为 `0`。账号槽位满时 API 会立即返回 HTTP `429`；OpenAI 兼容响应的 `error.code` 为 `account_pool_busy`。如需排队等待，可显式把 `DS2API_ACCOUNT_MAX_QUEUE` 或 `runtime.account_max_queue` 设置为正数。
+
 ### 3.3 运行时行为配置（通过 Admin API 设置）
 
 部分运行时行为无法通过环境变量直接配置，需要在部署后通过 Admin API 设置，例如：
 
 - **自动删除会话模式** (`auto_delete.mode`)：支持 `none` / `single` / `all`，默认为 `none`。可通过 `PUT /admin/settings` 更新。
-- **每账号并发上限** (`account_max_inflight`)：环境变量已支持，但也可通过 Admin API 热更新。
+- **每账号并发上限** (`account_max_inflight`)：默认 `1`，环境变量已支持，但也可通过 Admin API 热更新。
+- **等待队列上限** (`account_max_queue`)：默认 `0`，表示账号忙时不排队，直接返回 HTTP `429`。
 - **全局并发上限** (`global_max_inflight`)：同上。
 
 详细说明参见 [API.md](../API.md#admin-接口) 中 `/admin/settings` 部分。

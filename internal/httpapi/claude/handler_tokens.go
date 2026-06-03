@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"ds2api/internal/auth"
 	"ds2api/internal/util"
 )
 
 func (h *Handler) CountTokens(w http.ResponseWriter, r *http.Request) {
 	a, err := h.Auth.Determine(r)
 	if err != nil {
+		if err == auth.ErrNoAccount {
+			writeClaudeError(w, http.StatusTooManyRequests, err.Error())
+			return
+		}
 		writeClaudeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}

@@ -255,8 +255,8 @@ VERCEL_TEAM_ID=team_xxxxxxxxxxxx   # optional for personal accounts
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `DS2API_ACCOUNT_MAX_INFLIGHT` | Per-account inflight limit | `2` |
-| `DS2API_ACCOUNT_MAX_QUEUE` | Waiting queue limit | `recommended_concurrency` |
+| `DS2API_ACCOUNT_MAX_INFLIGHT` | Per-account inflight limit | `1` |
+| `DS2API_ACCOUNT_MAX_QUEUE` | Waiting queue limit | `0` |
 | `DS2API_GLOBAL_MAX_INFLIGHT` | Global inflight limit | `recommended_concurrency` |
 | `DS2API_ENV_WRITEBACK` | When `DS2API_CONFIG_JSON` is present, auto-write to `DS2API_CONFIG_PATH` and switch to file-backed mode after success (`1/true/yes/on`) | Disabled |
 | `DS2API_VERCEL_INTERNAL_SECRET` | Hybrid streaming internal auth | Falls back to `DS2API_ADMIN_KEY` |
@@ -266,6 +266,8 @@ VERCEL_TEAM_ID=team_xxxxxxxxxxxx   # optional for personal accounts
 | `VERCEL_PROJECT_ID` | Vercel project ID | — |
 | `VERCEL_TEAM_ID` | Vercel team ID | — |
 | `DS2API_VERCEL_PROTECTION_BYPASS` | Deployment protection bypass for internal Node→Go calls | — |
+
+By default, each DeepSeek account handles only 1 concurrent request and the waiting queue is `0`. When all account slots are busy, the API returns HTTP `429` immediately; OpenAI-compatible responses use `error.code: "account_pool_busy"`. To allow waiting, explicitly set `DS2API_ACCOUNT_MAX_QUEUE` or `runtime.account_max_queue` to a positive number.
 
 ### 3.4 Vercel Architecture
 

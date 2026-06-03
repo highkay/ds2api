@@ -61,7 +61,7 @@
     "jwt_expire_hours": 24
   },
   "runtime": {
-    "account_max_inflight": 2,
+    "account_max_inflight": 1,
     "account_max_queue": 0,
     "global_max_inflight": 0,
     "token_refresh_interval_hours": 6,

@@ -26,7 +26,7 @@ type Pool struct {
 }
 
 func NewPool(store *config.Store) *Pool {
-	maxPer := 2
+	maxPer := 1
 	if store != nil {
 		maxPer = store.RuntimeAccountMaxInflight()
 	}

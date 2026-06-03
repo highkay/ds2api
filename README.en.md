@@ -295,14 +295,16 @@ Gemini routes also accept `x-goog-api-key`, or `?key=` / `?api_key=` when no aut
 ## Concurrency Model
 
 ```
-Per-account inflight = DS2API_ACCOUNT_MAX_INFLIGHT (default 2)
+Per-account inflight = DS2API_ACCOUNT_MAX_INFLIGHT (default 1)
 Recommended concurrency = account_count × per_account_inflight
-Queue limit = DS2API_ACCOUNT_MAX_QUEUE (default = recommended concurrency)
-429 threshold = inflight + queue ≈ account_count × 4
+Queue limit = DS2API_ACCOUNT_MAX_QUEUE (default 0)
+429 threshold = inflight + queue
 ```
 
-- When inflight slots are full, requests enter a waiting queue — **no immediate 429**
-- 429 is returned only when total load exceeds inflight + queue capacity
+- By default, one DeepSeek account handles only 1 concurrent request
+- The default waiting queue is `0`, so requests return `429 Too Many Requests` immediately when all account inflight slots are full
+- OpenAI-compatible responses use `error.code: "account_pool_busy"`
+- To allow waiting, explicitly set `DS2API_ACCOUNT_MAX_QUEUE` or `runtime.account_max_queue` to a positive number
 - `GET /admin/queue/status` returns real-time concurrency state
 
 ## Tool Call Adaptation

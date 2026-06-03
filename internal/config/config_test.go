@@ -321,6 +321,33 @@ func TestRuntimeTokenRefreshIntervalHoursUsesConfigValue(t *testing.T) {
 	}
 }
 
+func TestRuntimeAccountLimitsDefaultToSingleSlotFailFast(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{"keys":["k1"]}`)
+	t.Setenv("DS2API_ACCOUNT_MAX_INFLIGHT", "")
+	t.Setenv("DS2API_ACCOUNT_MAX_QUEUE", "")
+
+	store := LoadStore()
+	if got := store.RuntimeAccountMaxInflight(); got != 1 {
+		t.Fatalf("expected default account max inflight=1, got %d", got)
+	}
+	if got := store.RuntimeAccountMaxQueue(99); got != 0 {
+		t.Fatalf("expected default account max queue=0, got %d", got)
+	}
+}
+
+func TestRuntimeAccountMaxQueueAllowsZeroConfig(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["k1"],
+		"runtime":{"account_max_queue":0}
+	}`)
+	t.Setenv("DS2API_ACCOUNT_MAX_QUEUE", "")
+
+	store := LoadStore()
+	if got := store.RuntimeAccountMaxQueue(99); got != 0 {
+		t.Fatalf("expected account max queue=0, got %d", got)
+	}
+}
+
 func TestRuntimeAccountMuteScanIntervalSecondsDefaultsToTwelveHours(t *testing.T) {
 	t.Setenv("DS2API_CONFIG_JSON", `{
 		"keys":["k1"],

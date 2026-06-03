@@ -25,12 +25,11 @@ type Handler struct {
 func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	a, err := h.Auth.Determine(r)
 	if err != nil {
-		status := http.StatusUnauthorized
-		detail := err.Error()
 		if err == auth.ErrNoAccount {
-			status = http.StatusTooManyRequests
+			shared.WriteOpenAIAccountPoolBusyError(w)
+			return
 		}
-		shared.WriteOpenAIError(w, status, detail)
+		shared.WriteOpenAIError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	defer h.Auth.Release(a)

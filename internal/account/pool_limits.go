@@ -38,7 +38,7 @@ func maxInflightFromEnv() int {
 			return n
 		}
 	}
-	return 2
+	return 1
 }
 
 func defaultRecommendedConcurrency(accountCount, maxInflightPerAccount int) int {
@@ -46,21 +46,18 @@ func defaultRecommendedConcurrency(accountCount, maxInflightPerAccount int) int 
 		return 0
 	}
 	if maxInflightPerAccount <= 0 {
-		maxInflightPerAccount = 2
+		maxInflightPerAccount = 1
 	}
 	return accountCount * maxInflightPerAccount
 }
 
-func maxQueueFromEnv(defaultSize int) int {
+func maxQueueFromEnv(_ int) int {
 	if raw := strings.TrimSpace(os.Getenv("DS2API_ACCOUNT_MAX_QUEUE")); raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
 			return n
 		}
 	}
-	if defaultSize < 0 {
-		return 0
-	}
-	return defaultSize
+	return 0
 }
 
 func (p *Pool) canAcquireIDLocked(accountID string) bool {

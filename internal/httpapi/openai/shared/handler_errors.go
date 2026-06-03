@@ -2,8 +2,17 @@ package shared
 
 import "net/http"
 
+const (
+	AccountPoolBusyErrorCode    = "account_pool_busy"
+	AccountPoolBusyErrorMessage = "No DeepSeek account is available; accounts may be unconfigured, busy, or request queueing is disabled/full."
+)
+
 func WriteOpenAIError(w http.ResponseWriter, status int, message string) {
 	WriteOpenAIErrorWithCode(w, status, message, "")
+}
+
+func WriteOpenAIAccountPoolBusyError(w http.ResponseWriter) {
+	WriteOpenAIErrorWithCode(w, http.StatusTooManyRequests, AccountPoolBusyErrorMessage, AccountPoolBusyErrorCode)
 }
 
 func WriteOpenAIErrorWithCode(w http.ResponseWriter, status int, message, code string) {

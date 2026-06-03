@@ -254,6 +254,34 @@ func TestUpdateSettingsHotReloadRuntime(t *testing.T) {
 	}
 }
 
+func TestUpdateSettingsHotReloadRuntimeQueueZero(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"keys":["k1"],
+		"accounts":[{"email":"a@test.com","token":"t1"}],
+		"runtime":{"account_max_inflight":1,"account_max_queue":20,"global_max_inflight":1}
+	}`)
+
+	payload := map[string]any{
+		"runtime": map[string]any{
+			"account_max_queue": 0,
+		},
+	}
+	b, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPut, "/admin/settings", bytes.NewReader(b))
+	rec := httptest.NewRecorder()
+	h.updateSettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := h.Store.RuntimeAccountMaxQueue(99); got != 0 {
+		t.Fatalf("RuntimeAccountMaxQueue=%d want=0", got)
+	}
+	status := h.Pool.Status()
+	if got := intFrom(status["max_queue_size"]); got != 0 {
+		t.Fatalf("max_queue_size=%d want=0", got)
+	}
+}
+
 func TestUpdateSettingsHotReloadTokenRefreshInterval(t *testing.T) {
 	h := newAdminTestHandler(t, `{
 		"keys":["k1"],
@@ -583,6 +611,37 @@ func TestConfigImportAppliesTokenRefreshInterval(t *testing.T) {
 	}
 	if got := h.Store.RuntimeTokenRefreshIntervalHours(); got != 11 {
 		t.Fatalf("token_refresh_interval_hours=%d want=11", got)
+	}
+}
+
+func TestConfigImportMergeAppliesZeroAccountMaxQueue(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"keys":["k1"],
+		"accounts":[{"email":"a@test.com","token":"t1"}],
+		"runtime":{"account_max_inflight":1,"account_max_queue":20,"global_max_inflight":1}
+	}`)
+
+	merge := map[string]any{
+		"mode": "merge",
+		"config": map[string]any{
+			"runtime": map[string]any{
+				"account_max_queue": 0,
+			},
+		},
+	}
+	mergeBytes, _ := json.Marshal(merge)
+	mergeReq := httptest.NewRequest(http.MethodPost, "/admin/config/import?mode=merge", bytes.NewReader(mergeBytes))
+	mergeRec := httptest.NewRecorder()
+	h.configImport(mergeRec, mergeReq)
+	if mergeRec.Code != http.StatusOK {
+		t.Fatalf("merge status=%d body=%s", mergeRec.Code, mergeRec.Body.String())
+	}
+	if got := h.Store.RuntimeAccountMaxQueue(99); got != 0 {
+		t.Fatalf("RuntimeAccountMaxQueue=%d want=0", got)
+	}
+	status := h.Pool.Status()
+	if got := intFrom(status["max_queue_size"]); got != 0 {
+		t.Fatalf("max_queue_size=%d want=0", got)
 	}
 }
 

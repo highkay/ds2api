@@ -33,11 +33,11 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 
 	a, err := h.Auth.Determine(r)
 	if err != nil {
-		status := http.StatusUnauthorized
 		if err == auth.ErrNoAccount {
-			status = http.StatusTooManyRequests
+			writeOpenAIAccountPoolBusyError(w)
+			return
 		}
-		writeOpenAIError(w, status, err.Error())
+		writeOpenAIError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	leased := false

@@ -717,6 +717,8 @@ Reads runtime settings and status, including:
 - `env_backed`, `needs_vercel_sync`
 - `toolcall` policy is fixed to `feature_match + high` and is no longer returned or editable via settings
 
+By default, `runtime.account_max_inflight=1` and `runtime.account_max_queue=0`. `account_max_queue=0` disables waiting; when all account concurrency slots are busy, requests return HTTP `429` immediately, and OpenAI-compatible responses use `error.code: "account_pool_busy"`.
+
 > `runtime.account_mute_scan_interval_seconds` is a config-file field, not a hot-updated `/admin/settings` field. It controls the local long-running background `/api/v0/users/current` mute scan interval, defaults to `43200` seconds, and does not run on Vercel Serverless.
 
 ### `PUT /admin/settings`
@@ -757,6 +759,8 @@ Imports full config with:
 The request can send config directly, or wrapped as `{"config": {...}, "mode":"merge"}`.
 Query params `?mode=merge` / `?mode=replace` are also supported.
 `replace` mode replaces the full config shape while preserving Vercel sync metadata. `merge` mode merges `keys`, `api_keys`, `accounts`, and `model_aliases`, and overwrites non-empty fields under `admin`, `runtime`, `responses`, and `embeddings`. Manage `compat`, `auto_delete`, and `history_split` via `/admin/settings` or the config file; legacy `toolcall` fields are ignored.
+
+In `merge` mode, `runtime.account_max_queue=0` is an explicit value and overwrites the existing queue limit.
 
 `merge` mode persists a non-zero `runtime.account_mute_scan_interval_seconds`, but changing that scan interval still requires restarting the local process before the background task uses it.
 

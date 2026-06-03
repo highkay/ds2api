@@ -87,7 +87,7 @@ func ValidateRuntimeConfig(runtime RuntimeConfig) error {
 	if err := ValidateIntRange("runtime.account_max_inflight", runtime.AccountMaxInflight, 1, 256, false); err != nil {
 		return err
 	}
-	if err := ValidateIntRange("runtime.account_max_queue", runtime.AccountMaxQueue, 1, 200000, false); err != nil {
+	if err := ValidateIntRange("runtime.account_max_queue", runtime.AccountMaxQueue, 0, 200000, false); err != nil {
 		return err
 	}
 	if err := ValidateIntRange("runtime.global_max_inflight", runtime.GlobalMaxInflight, 1, 200000, false); err != nil {

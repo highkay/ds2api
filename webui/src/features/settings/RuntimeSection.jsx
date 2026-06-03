@@ -20,11 +20,11 @@ export default function RuntimeSection({ t, form, setForm }) {
                     <span className="text-muted-foreground">{t('settings.accountMaxQueue')}</span>
                     <input
                         type="number"
-                        min={1}
+                        min={0}
                         value={form.runtime.account_max_queue}
                         onChange={(e) => setForm((prev) => ({
                             ...prev,
-                            runtime: { ...prev.runtime, account_max_queue: Number(e.target.value || 1) },
+                            runtime: { ...prev.runtime, account_max_queue: Number(e.target.value || 0) },
                         }))}
                         className="w-full bg-background border border-border rounded-lg px-3 py-2"
                     />

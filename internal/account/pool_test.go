@@ -10,9 +10,13 @@ import (
 )
 
 func newPoolForTest(t *testing.T, maxInflight string) *Pool {
+	return newPoolForTestWithQueue(t, maxInflight, "")
+}
+
+func newPoolForTestWithQueue(t *testing.T, maxInflight, maxQueue string) *Pool {
 	t.Helper()
 	t.Setenv("DS2API_ACCOUNT_MAX_INFLIGHT", maxInflight)
-	t.Setenv("DS2API_ACCOUNT_MAX_QUEUE", "")
+	t.Setenv("DS2API_ACCOUNT_MAX_QUEUE", maxQueue)
 	t.Setenv("DS2API_CONFIG_JSON", `{
 		"keys":["k1"],
 		"accounts":[
@@ -25,9 +29,13 @@ func newPoolForTest(t *testing.T, maxInflight string) *Pool {
 }
 
 func newSingleAccountPoolForTest(t *testing.T, maxInflight string) *Pool {
+	return newSingleAccountPoolForTestWithQueue(t, maxInflight, "")
+}
+
+func newSingleAccountPoolForTestWithQueue(t *testing.T, maxInflight, maxQueue string) *Pool {
 	t.Helper()
 	t.Setenv("DS2API_ACCOUNT_MAX_INFLIGHT", maxInflight)
-	t.Setenv("DS2API_ACCOUNT_MAX_QUEUE", "")
+	t.Setenv("DS2API_ACCOUNT_MAX_QUEUE", maxQueue)
 	t.Setenv("DS2API_CONFIG_JSON", `{
 		"keys":["k1"],
 		"accounts":[{"email":"acc1@example.com","token":"token1"}]
@@ -140,13 +148,13 @@ func TestPoolStatusRecommendedConcurrencyDefault(t *testing.T) {
 	pool := newPoolForTest(t, "")
 	status := pool.Status()
 
-	if got, ok := status["max_inflight_per_account"].(int); !ok || got != 2 {
+	if got, ok := status["max_inflight_per_account"].(int); !ok || got != 1 {
 		t.Fatalf("unexpected max_inflight_per_account: %#v", status["max_inflight_per_account"])
 	}
-	if got, ok := status["recommended_concurrency"].(int); !ok || got != 4 {
+	if got, ok := status["recommended_concurrency"].(int); !ok || got != 2 {
 		t.Fatalf("unexpected recommended_concurrency: %#v", status["recommended_concurrency"])
 	}
-	if got, ok := status["max_queue_size"].(int); !ok || got != 4 {
+	if got, ok := status["max_queue_size"].(int); !ok || got != 0 {
 		t.Fatalf("unexpected max_queue_size: %#v", status["max_queue_size"])
 	}
 }
@@ -161,7 +169,7 @@ func TestPoolStatusRecommendedConcurrencyRespectsOverride(t *testing.T) {
 	if got, ok := status["recommended_concurrency"].(int); !ok || got != 6 {
 		t.Fatalf("unexpected recommended_concurrency: %#v", status["recommended_concurrency"])
 	}
-	if got, ok := status["max_queue_size"].(int); !ok || got != 6 {
+	if got, ok := status["max_queue_size"].(int); !ok || got != 0 {
 		t.Fatalf("unexpected max_queue_size: %#v", status["max_queue_size"])
 	}
 }
@@ -276,7 +284,7 @@ func TestPoolPenalizeDemotesAccountDuringHealthSelection(t *testing.T) {
 }
 
 func TestPoolAcquireWaitQueuesAndSucceedsAfterRelease(t *testing.T) {
-	pool := newSingleAccountPoolForTest(t, "1")
+	pool := newSingleAccountPoolForTestWithQueue(t, "1", "1")
 	first, ok := pool.Acquire("", nil)
 	if !ok {
 		t.Fatal("expected first acquire to succeed")
@@ -311,7 +319,7 @@ func TestPoolAcquireWaitQueuesAndSucceedsAfterRelease(t *testing.T) {
 }
 
 func TestPoolAcquireWaitQueueLimitReturnsFalse(t *testing.T) {
-	pool := newSingleAccountPoolForTest(t, "1")
+	pool := newSingleAccountPoolForTestWithQueue(t, "1", "1")
 	first, ok := pool.Acquire("", nil)
 	if !ok {
 		t.Fatal("expected first acquire to succeed")
@@ -348,5 +356,32 @@ func TestPoolAcquireWaitQueueLimitReturnsFalse(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for first queued acquire")
+	}
+}
+
+func TestPoolAcquireWaitDefaultQueueDisabledFailsFast(t *testing.T) {
+	pool := newSingleAccountPoolForTest(t, "1")
+	first, ok := pool.Acquire("", nil)
+	if !ok {
+		t.Fatal("expected first acquire to succeed")
+	}
+	defer pool.Release(first.Identifier())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if _, ok := pool.AcquireWait(ctx, "", nil); ok {
+		t.Fatal("expected acquire wait to fail when default queue is disabled")
+	}
+	if time.Since(start) > 120*time.Millisecond {
+		t.Fatalf("queue-disabled acquire should fail fast, took %s", time.Since(start))
+	}
+
+	status := pool.Status()
+	if got, ok := status["waiting"].(int); !ok || got != 0 {
+		t.Fatalf("unexpected waiting count: %#v", status["waiting"])
+	}
+	if got, ok := status["max_queue_size"].(int); !ok || got != 0 {
+		t.Fatalf("unexpected max_queue_size: %#v", status["max_queue_size"])
 	}
 }

@@ -39,7 +39,7 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 			if runtimeCfg.AccountMaxInflight > 0 {
 				c.Runtime.AccountMaxInflight = runtimeCfg.AccountMaxInflight
 			}
-			if runtimeCfg.AccountMaxQueue > 0 {
+			if runtimeCfg.AccountMaxQueue >= 0 {
 				c.Runtime.AccountMaxQueue = runtimeCfg.AccountMaxQueue
 			}
 			if runtimeCfg.GlobalMaxInflight > 0 {

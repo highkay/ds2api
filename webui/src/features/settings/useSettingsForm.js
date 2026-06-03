@@ -12,7 +12,7 @@ const MAX_AUTO_FETCH_FAILURES = 3
 
 const DEFAULT_FORM = {
     admin: { jwt_expire_hours: 24 },
-    runtime: { account_max_inflight: 2, account_max_queue: 10, global_max_inflight: 10, token_refresh_interval_hours: 6 },
+    runtime: { account_max_inflight: 1, account_max_queue: 0, global_max_inflight: 1, token_refresh_interval_hours: 6 },
     compat: { strip_reference_markers: true },
     responses: { store_ttl_seconds: 900 },
     embeddings: { provider: '' },
@@ -51,18 +51,18 @@ function normalizeAutoDeleteMode(raw) {
 
 function fromServerForm(data) {
     return {
-        admin: { jwt_expire_hours: Number(data.admin?.jwt_expire_hours || 24) },
+        admin: { jwt_expire_hours: Number(data.admin?.jwt_expire_hours ?? 24) },
         runtime: {
-            account_max_inflight: Number(data.runtime?.account_max_inflight || 2),
-            account_max_queue: Number(data.runtime?.account_max_queue || 10),
-            global_max_inflight: Number(data.runtime?.global_max_inflight || 10),
-            token_refresh_interval_hours: Number(data.runtime?.token_refresh_interval_hours || 6),
+            account_max_inflight: Number(data.runtime?.account_max_inflight ?? 1),
+            account_max_queue: Number(data.runtime?.account_max_queue ?? 0),
+            global_max_inflight: Number(data.runtime?.global_max_inflight ?? 1),
+            token_refresh_interval_hours: Number(data.runtime?.token_refresh_interval_hours ?? 6),
         },
         compat: {
             strip_reference_markers: data.compat?.strip_reference_markers ?? true,
         },
         responses: {
-            store_ttl_seconds: Number(data.responses?.store_ttl_seconds || 900),
+            store_ttl_seconds: Number(data.responses?.store_ttl_seconds ?? 900),
         },
         embeddings: {
             provider: data.embeddings?.provider || '',
@@ -72,7 +72,7 @@ function fromServerForm(data) {
         },
         history_split: {
             enabled: true,
-            trigger_after_turns: Number(data.history_split?.trigger_after_turns || 1),
+            trigger_after_turns: Number(data.history_split?.trigger_after_turns ?? 1),
         },
         model_aliases_text: JSON.stringify(data.model_aliases || {}, null, 2),
     }

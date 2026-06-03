@@ -67,4 +67,10 @@ func TestValidateConfigAcceptsLegacyAutoDeleteSessions(t *testing.T) {
 	}
 }
 
+func TestValidateRuntimeConfigAcceptsZeroAccountMaxQueue(t *testing.T) {
+	if err := ValidateRuntimeConfig(RuntimeConfig{AccountMaxInflight: 1, AccountMaxQueue: 0, GlobalMaxInflight: 1}); err != nil {
+		t.Fatalf("expected zero account_max_queue to be valid, got %v", err)
+	}
+}
+
 func intPtr(v int) *int { return &v }

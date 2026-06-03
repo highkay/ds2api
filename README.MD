@@ -297,14 +297,16 @@ Gemini 路由还可以使用 `x-goog-api-key`，或在没有认证头时使用 `
 ## 并发模型
 
 ```
-每账号可用并发 = DS2API_ACCOUNT_MAX_INFLIGHT（默认 2）
+每账号可用并发 = DS2API_ACCOUNT_MAX_INFLIGHT（默认 1）
 建议并发值 = 账号数量 × 每账号并发上限
-等待队列上限 = DS2API_ACCOUNT_MAX_QUEUE（默认 = 建议并发值）
-429 阈值 = in-flight + 等待队列 ≈ 账号数量 × 4
+等待队列上限 = DS2API_ACCOUNT_MAX_QUEUE（默认 0）
+429 阈值 = in-flight + 等待队列
 ```
 
-- 当 in-flight 槽位满时，请求进入等待队列，**不会立即 429**
-- 超出总承载上限后才返回 `429 Too Many Requests`
+- 默认一个 DeepSeek 账号同时只处理 1 个请求
+- 默认等待队列为 `0`，当所有账号 in-flight 槽位满时，直接返回 `429 Too Many Requests`
+- OpenAI 兼容响应的 `error.code` 为 `account_pool_busy`
+- 如需排队等待，可显式设置 `DS2API_ACCOUNT_MAX_QUEUE` 或 `runtime.account_max_queue` 为正数
 - `GET /admin/queue/status` 返回实时并发状态
 
 ## Tool Call 适配

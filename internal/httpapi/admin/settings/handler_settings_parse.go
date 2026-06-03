@@ -46,7 +46,7 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 	}
 
 	if raw, ok := req["runtime"].(map[string]any); ok {
-		cfg := &config.RuntimeConfig{AccountHealthCooldownEmptySeconds: -1}
+		cfg := &config.RuntimeConfig{AccountMaxQueue: -1, AccountHealthCooldownEmptySeconds: -1}
 		if v, exists := raw["account_max_inflight"]; exists {
 			n := intFrom(v)
 			if err := config.ValidateIntRange("runtime.account_max_inflight", n, 1, 256, true); err != nil {
@@ -56,7 +56,7 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 		}
 		if v, exists := raw["account_max_queue"]; exists {
 			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_max_queue", n, 1, 200000, true); err != nil {
+			if err := config.ValidateIntRange("runtime.account_max_queue", n, 0, 200000, true); err != nil {
 				return nil, nil, nil, nil, nil, nil, nil, nil, err
 			}
 			cfg.AccountMaxQueue = n

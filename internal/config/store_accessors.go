@@ -113,10 +113,10 @@ func (s *Store) RuntimeAccountMaxInflight() int {
 			return n
 		}
 	}
-	return 2
+	return 1
 }
 
-func (s *Store) RuntimeAccountMaxQueue(defaultSize int) int {
+func (s *Store) RuntimeAccountMaxQueue(_ int) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.cfg.Runtime.AccountMaxQueue > 0 {
@@ -127,10 +127,7 @@ func (s *Store) RuntimeAccountMaxQueue(defaultSize int) int {
 			return n
 		}
 	}
-	if defaultSize < 0 {
-		return 0
-	}
-	return defaultSize
+	return 0
 }
 
 func (s *Store) RuntimeGlobalMaxInflight(defaultSize int) int {

@@ -106,7 +106,7 @@ func (h *Handler) configImport(w http.ResponseWriter, r *http.Request) {
 			if incoming.Runtime.AccountMaxInflight > 0 {
 				next.Runtime.AccountMaxInflight = incoming.Runtime.AccountMaxInflight
 			}
-			if incoming.Runtime.AccountMaxQueue > 0 {
+			if configPayloadFieldPresent(payload, "runtime", "account_max_queue") {
 				next.Runtime.AccountMaxQueue = incoming.Runtime.AccountMaxQueue
 			}
 			if incoming.Runtime.GlobalMaxInflight > 0 {
@@ -145,4 +145,13 @@ func (h *Handler) configImport(w http.ResponseWriter, r *http.Request) {
 		"imported_accounts": importedAccounts,
 		"message":           "config imported",
 	})
+}
+
+func configPayloadFieldPresent(payload map[string]any, section, name string) bool {
+	raw, ok := payload[section].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, exists := raw[name]
+	return exists
 }

@@ -108,7 +108,7 @@ func TestPoolStatusAccountDetails(t *testing.T) {
 }
 
 func TestPoolAcquireWaitContextCancelled(t *testing.T) {
-	pool := newSingleAccountPoolForTest(t, "1")
+	pool := newSingleAccountPoolForTestWithQueue(t, "1", "1")
 	// Exhaust the pool
 	first, ok := pool.Acquire("", nil)
 	if !ok {
@@ -184,7 +184,7 @@ func TestPoolMultipleAcquireReleaseCycles(t *testing.T) {
 }
 
 func TestPoolConcurrentAcquireWait(t *testing.T) {
-	pool := newSingleAccountPoolForTest(t, "1")
+	pool := newSingleAccountPoolForTestWithQueue(t, "1", "3")
 	first, ok := pool.Acquire("", nil)
 	if !ok {
 		t.Fatal("expected first acquire success")
@@ -202,7 +202,7 @@ func TestPoolConcurrentAcquireWait(t *testing.T) {
 		}()
 	}
 
-	// Wait for all to be queued (only 1 can queue)
+	// Wait for all waiters to queue before releasing the first lease.
 	time.Sleep(50 * time.Millisecond)
 
 	// Release and allow queued requests to proceed
@@ -225,7 +225,7 @@ func TestPoolConcurrentAcquireWait(t *testing.T) {
 		}
 	}
 
-	// At least 1 should succeed; 2 may fail due to queue limit
+	// At least 1 should succeed; later waiters may fail if their context expires.
 	if successCount < 1 {
 		t.Fatalf("expected at least 1 success, got success=%d timeout=%d", successCount, timeoutCount)
 	}
