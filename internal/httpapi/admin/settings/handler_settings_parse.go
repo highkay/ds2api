@@ -21,6 +21,26 @@ func boolFrom(v any) bool {
 	}
 }
 
+func setBoolPtrFrom(raw map[string]any, key string, dest **bool) {
+	if v, exists := raw[key]; exists {
+		b := boolFrom(v)
+		*dest = &b
+	}
+}
+
+func setRuntimeIntFrom(raw map[string]any, key string, min, max int, dest *int) error {
+	v, exists := raw[key]
+	if !exists {
+		return nil
+	}
+	n := intFrom(v)
+	if err := config.ValidateIntRange("runtime."+key, n, min, max, true); err != nil {
+		return err
+	}
+	*dest = n
+	return nil
+}
+
 func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *config.RuntimeConfig, *config.CompatConfig, *config.ResponsesConfig, *config.EmbeddingsConfig, *config.AutoDeleteConfig, *config.HistorySplitConfig, map[string]string, error) {
 	var (
 		adminCfg        *config.AdminConfig
@@ -75,76 +95,78 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 			}
 			cfg.TokenRefreshIntervalHours = n
 		}
-		if v, exists := raw["disable_upstream_file_uploads"]; exists {
-			b := boolFrom(v)
-			cfg.DisableUpstreamFileUploads = &b
+		if err := setRuntimeIntFrom(raw, "upstream_max_attempts", 1, 5, &cfg.UpstreamMaxAttempts); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_enabled"]; exists {
-			b := boolFrom(v)
-			cfg.AccountHealthEnabled = &b
+		setBoolPtrFrom(raw, "retry_after_muted", &cfg.RetryAfterMuted)
+		setBoolPtrFrom(raw, "retry_after_http_429", &cfg.RetryAfterHTTP429)
+		setBoolPtrFrom(raw, "retry_after_http_403", &cfg.RetryAfterHTTP403)
+		setBoolPtrFrom(raw, "retry_after_network", &cfg.RetryAfterNetwork)
+		setBoolPtrFrom(raw, "retry_after_http_5xx", &cfg.RetryAfterHTTP5xx)
+		setBoolPtrFrom(raw, "allow_cooldown_account_fallback", &cfg.AllowCooldownAccountFallback)
+		setBoolPtrFrom(raw, "risk_breaker_enabled", &cfg.RiskBreakerEnabled)
+		if err := setRuntimeIntFrom(raw, "risk_breaker_window_seconds", 30, 86400, &cfg.RiskBreakerWindowSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_recovery_window_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_recovery_window_seconds", n, 1, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthRecoveryWindowSeconds = n
+		if err := setRuntimeIntFrom(raw, "risk_breaker_mute_cooldown_seconds", 1, 86400, &cfg.RiskBreakerMuteCooldownSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_max_cooldown_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_max_cooldown_seconds", n, 1, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthMaxCooldownSeconds = n
+		if err := setRuntimeIntFrom(raw, "risk_breaker_hard_mute_count", 1, 100, &cfg.RiskBreakerHardMuteCount); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_cooldown_429_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_cooldown_429_seconds", n, 1, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthCooldown429Seconds = n
+		if err := setRuntimeIntFrom(raw, "risk_breaker_hard_cooldown_seconds", 1, 86400, &cfg.RiskBreakerHardCooldownSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_cooldown_403_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_cooldown_403_seconds", n, 1, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthCooldown403Seconds = n
+		if err := setRuntimeIntFrom(raw, "risk_breaker_http_429_threshold", 1, 10000, &cfg.RiskBreakerHTTP429Threshold); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_cooldown_auth_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_cooldown_auth_seconds", n, 1, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthCooldownAuthSeconds = n
+		if err := setRuntimeIntFrom(raw, "risk_breaker_http_403_threshold", 1, 10000, &cfg.RiskBreakerHTTP403Threshold); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_cooldown_5xx_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_cooldown_5xx_seconds", n, 1, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthCooldown5xxSeconds = n
+		if err := setRuntimeIntFrom(raw, "risk_breaker_soft_cooldown_seconds", 1, 86400, &cfg.RiskBreakerSoftCooldownSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_cooldown_network_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_cooldown_network_seconds", n, 1, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthCooldownNetworkSeconds = n
+		if err := setRuntimeIntFrom(raw, "caller_max_inflight", 1, 1000, &cfg.CallerMaxInflight); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_cooldown_empty_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_cooldown_empty_seconds", n, 0, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthCooldownEmptySeconds = n
+		if err := setRuntimeIntFrom(raw, "max_prompt_chars", 1000, 2000000, &cfg.MaxPromptChars); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
-		if v, exists := raw["account_health_cooldown_muted_seconds"]; exists {
-			n := intFrom(v)
-			if err := config.ValidateIntRange("runtime.account_health_cooldown_muted_seconds", n, 1, 86400, true); err != nil {
-				return nil, nil, nil, nil, nil, nil, nil, nil, err
-			}
-			cfg.AccountHealthCooldownMutedSeconds = n
+		if err := setRuntimeIntFrom(raw, "max_ref_files_per_request", 1, 200, &cfg.MaxRefFilesPerRequest); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "max_inline_files_per_request", 1, 200, &cfg.MaxInlineFilesPerRequest); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		setBoolPtrFrom(raw, "allow_auto_delete_all", &cfg.AllowAutoDeleteAll)
+		setBoolPtrFrom(raw, "disable_upstream_file_uploads", &cfg.DisableUpstreamFileUploads)
+		setBoolPtrFrom(raw, "account_health_enabled", &cfg.AccountHealthEnabled)
+		if err := setRuntimeIntFrom(raw, "account_health_recovery_window_seconds", 1, 86400, &cfg.AccountHealthRecoveryWindowSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "account_health_max_cooldown_seconds", 1, 86400, &cfg.AccountHealthMaxCooldownSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "account_health_cooldown_429_seconds", 1, 86400, &cfg.AccountHealthCooldown429Seconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "account_health_cooldown_403_seconds", 1, 86400, &cfg.AccountHealthCooldown403Seconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "account_health_cooldown_auth_seconds", 1, 86400, &cfg.AccountHealthCooldownAuthSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "account_health_cooldown_5xx_seconds", 1, 86400, &cfg.AccountHealthCooldown5xxSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "account_health_cooldown_network_seconds", 1, 86400, &cfg.AccountHealthCooldownNetworkSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "account_health_cooldown_empty_seconds", 0, 86400, &cfg.AccountHealthCooldownEmptySeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
+		}
+		if err := setRuntimeIntFrom(raw, "account_health_cooldown_muted_seconds", 1, 86400, &cfg.AccountHealthCooldownMutedSeconds); err != nil {
+			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
 		if cfg.AccountMaxInflight > 0 && cfg.GlobalMaxInflight > 0 && cfg.GlobalMaxInflight < cfg.AccountMaxInflight {
 			return nil, nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("runtime.global_max_inflight must be >= runtime.account_max_inflight")

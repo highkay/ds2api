@@ -56,14 +56,15 @@ func (c *Client) GetSessionCount(ctx context.Context, a *auth.RequestAuth, maxAt
 		resp, status, err := c.getJSONWithStatus(ctx, clients.regular, reqURL, headers)
 		if err != nil {
 			config.Logger.Warn("[get_session_count] request error", "error", err, "account", a.AccountID)
-			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+			if switchAccountAfterPenalty(ctx, a, account.PenaltyNetwork) {
 				refreshed = false
 				attempts++
 				clients = c.requestClientsForAuth(ctx, a)
 				continue
 			}
-			attempts++
-			continue
+			stats.Success = false
+			stats.ErrorMessage = err.Error()
+			return stats, err
 		}
 
 		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
@@ -99,11 +100,16 @@ func (c *Client) GetSessionCount(ctx context.Context, a *auth.RequestAuth, maxAt
 					continue
 				}
 			}
-			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)) {
+			penalty := penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)
+			if switchAccountAfterPenalty(ctx, a, penalty) {
 				refreshed = false
 				attempts++
 				clients = c.requestClientsForAuth(ctx, a)
 				continue
+			}
+			if penalty != account.PenaltyUnknown {
+				stats.Success = false
+				return stats, errors.New(stats.ErrorMessage)
 			}
 		}
 		attempts++

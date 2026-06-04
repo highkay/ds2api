@@ -48,14 +48,14 @@ func (c *Client) DeleteSession(ctx context.Context, a *auth.RequestAuth, session
 		resp, status, err := c.postJSONWithStatus(ctx, clients.regular, clients.fallback, dsprotocol.DeepSeekDeleteSessionURL, headers, payload)
 		if err != nil {
 			config.Logger.Warn("[delete_session] request error", "error", err, "session_id", sessionID)
-			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+			if switchAccountAfterPenalty(ctx, a, account.PenaltyNetwork) {
 				refreshed = false
 				attempts++
 				clients = c.requestClientsForAuth(ctx, a)
 				continue
 			}
-			attempts++
-			continue
+			result.ErrorMessage = err.Error()
+			return result, err
 		}
 
 		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
@@ -74,11 +74,15 @@ func (c *Client) DeleteSession(ctx context.Context, a *auth.RequestAuth, session
 					continue
 				}
 			}
-			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)) {
+			penalty := penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)
+			if switchAccountAfterPenalty(ctx, a, penalty) {
 				refreshed = false
 				attempts++
 				clients = c.requestClientsForAuth(ctx, a)
 				continue
+			}
+			if penalty != account.PenaltyUnknown {
+				return result, errors.New(result.ErrorMessage)
 			}
 		}
 		attempts++

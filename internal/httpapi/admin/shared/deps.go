@@ -34,6 +34,26 @@ type ConfigStore interface {
 	RuntimeAccountMaxQueue(defaultSize int) int
 	RuntimeGlobalMaxInflight(defaultSize int) int
 	RuntimeTokenRefreshIntervalHours() int
+	RuntimeUpstreamMaxAttempts() int
+	RuntimeRetryAfterMuted() bool
+	RuntimeRetryAfterHTTP429() bool
+	RuntimeRetryAfterHTTP403() bool
+	RuntimeRetryAfterNetwork() bool
+	RuntimeRetryAfterHTTP5xx() bool
+	RuntimeAllowCooldownAccountFallback() bool
+	RuntimeRiskBreakerEnabled() bool
+	RuntimeRiskBreakerWindowSeconds() int
+	RuntimeRiskBreakerMuteCooldownSeconds() int
+	RuntimeRiskBreakerHardMuteCount() int
+	RuntimeRiskBreakerHardCooldownSeconds() int
+	RuntimeRiskBreakerHTTP429Threshold() int
+	RuntimeRiskBreakerHTTP403Threshold() int
+	RuntimeRiskBreakerSoftCooldownSeconds() int
+	RuntimeCallerMaxInflight() int
+	RuntimeMaxPromptChars() int
+	RuntimeMaxRefFilesPerRequest() int
+	RuntimeMaxInlineFilesPerRequest() int
+	RuntimeAllowAutoDeleteAll() bool
 	UpstreamFileUploadsEnabled() bool
 	AccountHealthEnabled() bool
 	AccountHealthRecoveryWindowSeconds() int
@@ -57,6 +77,8 @@ type PoolController interface {
 	Status() map[string]any
 	ApplyRuntimeLimits(maxInflightPerAccount, maxQueueSize, globalMaxInflight int)
 	ApplyHealthConfig(cfg account.HealthConfig)
+	ApplyRiskConfig(cfg account.RiskConfig)
+	ApplyRuntimePolicy(allowCooldownFallback bool)
 }
 
 type OpenAIChatCaller interface {

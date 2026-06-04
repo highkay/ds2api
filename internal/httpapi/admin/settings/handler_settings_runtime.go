@@ -6,6 +6,10 @@ import (
 )
 
 func validateMergedRuntimeSettings(current config.RuntimeConfig, incoming *config.RuntimeConfig) error {
+	return validateRuntimeSettings(mergeRuntimeConfig(current, incoming))
+}
+
+func mergeRuntimeConfig(current config.RuntimeConfig, incoming *config.RuntimeConfig) config.RuntimeConfig {
 	merged := current
 	if incoming != nil {
 		if incoming.AccountMaxInflight > 0 {
@@ -19,6 +23,66 @@ func validateMergedRuntimeSettings(current config.RuntimeConfig, incoming *confi
 		}
 		if incoming.TokenRefreshIntervalHours > 0 {
 			merged.TokenRefreshIntervalHours = incoming.TokenRefreshIntervalHours
+		}
+		if incoming.UpstreamMaxAttempts > 0 {
+			merged.UpstreamMaxAttempts = incoming.UpstreamMaxAttempts
+		}
+		if incoming.RetryAfterMuted != nil {
+			merged.RetryAfterMuted = incoming.RetryAfterMuted
+		}
+		if incoming.RetryAfterHTTP429 != nil {
+			merged.RetryAfterHTTP429 = incoming.RetryAfterHTTP429
+		}
+		if incoming.RetryAfterHTTP403 != nil {
+			merged.RetryAfterHTTP403 = incoming.RetryAfterHTTP403
+		}
+		if incoming.RetryAfterNetwork != nil {
+			merged.RetryAfterNetwork = incoming.RetryAfterNetwork
+		}
+		if incoming.RetryAfterHTTP5xx != nil {
+			merged.RetryAfterHTTP5xx = incoming.RetryAfterHTTP5xx
+		}
+		if incoming.AllowCooldownAccountFallback != nil {
+			merged.AllowCooldownAccountFallback = incoming.AllowCooldownAccountFallback
+		}
+		if incoming.RiskBreakerEnabled != nil {
+			merged.RiskBreakerEnabled = incoming.RiskBreakerEnabled
+		}
+		if incoming.RiskBreakerWindowSeconds > 0 {
+			merged.RiskBreakerWindowSeconds = incoming.RiskBreakerWindowSeconds
+		}
+		if incoming.RiskBreakerMuteCooldownSeconds > 0 {
+			merged.RiskBreakerMuteCooldownSeconds = incoming.RiskBreakerMuteCooldownSeconds
+		}
+		if incoming.RiskBreakerHardMuteCount > 0 {
+			merged.RiskBreakerHardMuteCount = incoming.RiskBreakerHardMuteCount
+		}
+		if incoming.RiskBreakerHardCooldownSeconds > 0 {
+			merged.RiskBreakerHardCooldownSeconds = incoming.RiskBreakerHardCooldownSeconds
+		}
+		if incoming.RiskBreakerHTTP429Threshold > 0 {
+			merged.RiskBreakerHTTP429Threshold = incoming.RiskBreakerHTTP429Threshold
+		}
+		if incoming.RiskBreakerHTTP403Threshold > 0 {
+			merged.RiskBreakerHTTP403Threshold = incoming.RiskBreakerHTTP403Threshold
+		}
+		if incoming.RiskBreakerSoftCooldownSeconds > 0 {
+			merged.RiskBreakerSoftCooldownSeconds = incoming.RiskBreakerSoftCooldownSeconds
+		}
+		if incoming.CallerMaxInflight > 0 {
+			merged.CallerMaxInflight = incoming.CallerMaxInflight
+		}
+		if incoming.MaxPromptChars > 0 {
+			merged.MaxPromptChars = incoming.MaxPromptChars
+		}
+		if incoming.MaxRefFilesPerRequest > 0 {
+			merged.MaxRefFilesPerRequest = incoming.MaxRefFilesPerRequest
+		}
+		if incoming.MaxInlineFilesPerRequest > 0 {
+			merged.MaxInlineFilesPerRequest = incoming.MaxInlineFilesPerRequest
+		}
+		if incoming.AllowAutoDeleteAll != nil {
+			merged.AllowAutoDeleteAll = incoming.AllowAutoDeleteAll
 		}
 		if incoming.DisableUpstreamFileUploads != nil {
 			merged.DisableUpstreamFileUploads = incoming.DisableUpstreamFileUploads
@@ -54,7 +118,7 @@ func validateMergedRuntimeSettings(current config.RuntimeConfig, incoming *confi
 			merged.AccountHealthCooldownMutedSeconds = incoming.AccountHealthCooldownMutedSeconds
 		}
 	}
-	return validateRuntimeSettings(merged)
+	return merged
 }
 
 func (h *Handler) applyRuntimeSettings() {
@@ -68,6 +132,8 @@ func (h *Handler) applyRuntimeSettings() {
 	global := h.Store.RuntimeGlobalMaxInflight(recommended)
 	h.Pool.ApplyRuntimeLimits(maxPer, maxQueue, global)
 	h.Pool.ApplyHealthConfig(account.LoadHealthConfigFromStore(h.Store))
+	h.Pool.ApplyRiskConfig(account.LoadRiskConfigFromStore(h.Store))
+	h.Pool.ApplyRuntimePolicy(h.Store.RuntimeAllowCooldownAccountFallback())
 }
 
 func defaultRuntimeRecommended(accountCount, maxPer int) int {

@@ -258,6 +258,13 @@ VERCEL_TEAM_ID=team_xxxxxxxxxxxx   # 个人账号可留空
 | `DS2API_ACCOUNT_MAX_INFLIGHT` | 每账号并发上限 | `1` |
 | `DS2API_ACCOUNT_MAX_QUEUE` | 等待队列上限 | `0` |
 | `DS2API_GLOBAL_MAX_INFLIGHT` | 全局并发上限 | `recommended_concurrency` |
+| `DS2API_UPSTREAM_MAX_ATTEMPTS` | 单次上游操作最大尝试次数 | `1` |
+| `DS2API_RETRY_AFTER_MUTED` | 账号禁言后是否自动换号重试 | `false` |
+| `DS2API_RETRY_AFTER_HTTP_429` | 上游 `429` 后是否自动换号重试 | `false` |
+| `DS2API_RETRY_AFTER_HTTP_403` | 上游 `403` 后是否自动换号重试 | `false` |
+| `DS2API_RETRY_AFTER_NETWORK` | 网络错误后是否自动换号重试 | `false` |
+| `DS2API_RETRY_AFTER_HTTP_5XX` | 上游 `5xx` 后是否自动换号重试 | `false` |
+| `DS2API_ALLOW_COOLDOWN_ACCOUNT_FALLBACK` | 是否允许在健康冷却账号中兜底挑号 | `false` |
 | `DS2API_ENV_WRITEBACK` | 检测到 `DS2API_CONFIG_JSON` 时自动写入 `DS2API_CONFIG_PATH`，并在成功后转为文件模式（`1/true/yes/on`） | 关闭 |
 | `DS2API_VERCEL_INTERNAL_SECRET` | 混合流式内部鉴权 | 回退用 `DS2API_ADMIN_KEY` |
 | `DS2API_VERCEL_STREAM_LEASE_TTL_SECONDS` | 流式 lease TTL | `900` |
@@ -267,16 +274,19 @@ VERCEL_TEAM_ID=team_xxxxxxxxxxxx   # 个人账号可留空
 | `VERCEL_TEAM_ID` | Vercel 团队 ID | — |
 | `DS2API_VERCEL_PROTECTION_BYPASS` | 部署保护绕过密钥（内部 Node→Go 调用） | — |
 
-默认策略是每个 DeepSeek 账号同时只处理 1 个请求，等待队列为 `0`。账号槽位满时 API 会立即返回 HTTP `429`；OpenAI 兼容响应的 `error.code` 为 `account_pool_busy`。如需排队等待，可显式把 `DS2API_ACCOUNT_MAX_QUEUE` 或 `runtime.account_max_queue` 设置为正数。
+默认策略是每个 DeepSeek 账号同时只处理 1 个请求，等待队列为 `0`。账号槽位满时 API 会立即返回 HTTP `429`；OpenAI 兼容响应的 `error.code` 为 `account_pool_busy`。如需排队等待，可显式把 `DS2API_ACCOUNT_MAX_QUEUE` 或 `runtime.account_max_queue` 设置为正数。账号保护相关默认值按 fail-closed 设计：单次上游尝试默认为 `1`，禁言、上游 `429`、上游 `403`、网络错误和 `5xx` 默认都不会自动换号继续重试。
 
 ### 3.3 运行时行为配置（通过 Admin API 设置）
 
-部分运行时行为无法通过环境变量直接配置，需要在部署后通过 Admin API 设置，例如：
+完整运行时行为可以写入 `config.json` / `DS2API_CONFIG_JSON`，也可以在部署后通过 Admin API 或 WebUI 热更新，例如：
 
 - **自动删除会话模式** (`auto_delete.mode`)：支持 `none` / `single` / `all`，默认为 `none`。可通过 `PUT /admin/settings` 更新。
 - **每账号并发上限** (`account_max_inflight`)：默认 `1`，环境变量已支持，但也可通过 Admin API 热更新。
 - **等待队列上限** (`account_max_queue`)：默认 `0`，表示账号忙时不排队，直接返回 HTTP `429`。
 - **全局并发上限** (`global_max_inflight`)：同上。
+- **池级风险熔断** (`risk_breaker_*`)：默认启用，任一禁言会冷却整个账号池 1 小时；10 分钟内 2 次禁言会冷却 6 小时；上游 `429` / `403` 达阈值会短冷却。
+- **调用方并发与内容预检** (`caller_max_inflight`、`max_prompt_chars`、`max_ref_files_per_request`、`max_inline_files_per_request`)：默认限制单个客户端凭据并发为 `2`，并在触达 DeepSeek 前拦截过长 prompt、过多引用文件和 inline 文件。
+- **全量自动删会话保护** (`allow_auto_delete_all`)：默认 `false`，即使 `auto_delete.mode=all` 也会降级为单会话清理。
 
 详细说明参见 [API.md](../API.md#admin-接口) 中 `/admin/settings` 部分。
 

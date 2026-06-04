@@ -1,6 +1,9 @@
 package account
 
 func (p *Pool) canQueueLocked(target string, exclude map[string]bool) bool {
+	if p.riskCoolingDownLocked(p.now()) {
+		return false
+	}
 	if target != "" {
 		if exclude[target] {
 			return false

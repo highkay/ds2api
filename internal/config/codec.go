@@ -63,6 +63,26 @@ func runtimeConfigPresent(runtime RuntimeConfig) bool {
 		runtime.GlobalMaxInflight > 0 ||
 		runtime.TokenRefreshIntervalHours > 0 ||
 		runtime.AccountMuteScanIntervalSeconds > 0 ||
+		runtime.UpstreamMaxAttempts > 0 ||
+		runtime.RetryAfterMuted != nil ||
+		runtime.RetryAfterHTTP429 != nil ||
+		runtime.RetryAfterHTTP403 != nil ||
+		runtime.RetryAfterNetwork != nil ||
+		runtime.RetryAfterHTTP5xx != nil ||
+		runtime.AllowCooldownAccountFallback != nil ||
+		runtime.RiskBreakerEnabled != nil ||
+		runtime.RiskBreakerWindowSeconds > 0 ||
+		runtime.RiskBreakerMuteCooldownSeconds > 0 ||
+		runtime.RiskBreakerHardMuteCount > 0 ||
+		runtime.RiskBreakerHardCooldownSeconds > 0 ||
+		runtime.RiskBreakerHTTP429Threshold > 0 ||
+		runtime.RiskBreakerHTTP403Threshold > 0 ||
+		runtime.RiskBreakerSoftCooldownSeconds > 0 ||
+		runtime.CallerMaxInflight > 0 ||
+		runtime.MaxPromptChars > 0 ||
+		runtime.MaxRefFilesPerRequest > 0 ||
+		runtime.MaxInlineFilesPerRequest > 0 ||
+		runtime.AllowAutoDeleteAll != nil ||
 		runtime.DisableUpstreamFileUploads != nil ||
 		runtime.AccountHealthEnabled != nil ||
 		runtime.AccountHealthRecoveryWindowSeconds > 0 ||
@@ -164,7 +184,7 @@ func (c Config) Clone() Config {
 		Proxies:      slices.Clone(c.Proxies),
 		ModelAliases: cloneStringMap(c.ModelAliases),
 		Admin:        c.Admin,
-		Runtime:      c.Runtime,
+		Runtime:      cloneRuntimeConfig(c.Runtime),
 		Compat: CompatConfig{
 			WideInputStrictOutput: cloneBoolPtr(c.Compat.WideInputStrictOutput),
 			StripReferenceMarkers: cloneBoolPtr(c.Compat.StripReferenceMarkers),
@@ -184,6 +204,21 @@ func (c Config) Clone() Config {
 		clone.AdditionalFields[k] = v
 	}
 	return clone
+}
+
+func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
+	out := in
+	out.RetryAfterMuted = cloneBoolPtr(in.RetryAfterMuted)
+	out.RetryAfterHTTP429 = cloneBoolPtr(in.RetryAfterHTTP429)
+	out.RetryAfterHTTP403 = cloneBoolPtr(in.RetryAfterHTTP403)
+	out.RetryAfterNetwork = cloneBoolPtr(in.RetryAfterNetwork)
+	out.RetryAfterHTTP5xx = cloneBoolPtr(in.RetryAfterHTTP5xx)
+	out.AllowCooldownAccountFallback = cloneBoolPtr(in.AllowCooldownAccountFallback)
+	out.RiskBreakerEnabled = cloneBoolPtr(in.RiskBreakerEnabled)
+	out.AllowAutoDeleteAll = cloneBoolPtr(in.AllowAutoDeleteAll)
+	out.DisableUpstreamFileUploads = cloneBoolPtr(in.DisableUpstreamFileUploads)
+	out.AccountHealthEnabled = cloneBoolPtr(in.AccountHealthEnabled)
+	return out
 }
 
 func cloneStringMap(in map[string]string) map[string]string {

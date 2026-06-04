@@ -91,11 +91,12 @@ func (c *Client) UploadFile(ctx context.Context, a *auth.RequestAuth, req Upload
 			powHeader = ""
 			lastFailureKind = FailureUnknown
 			lastFailureMessage = err.Error()
-			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+			if switchAccountAfterPenalty(ctx, a, account.PenaltyNetwork) {
 				refreshed = false
+				attempts++
+				continue
 			}
-			attempts++
-			continue
+			return nil, err
 		}
 		if captureSession != nil {
 			resp.Body = captureSession.WrapBody(resp.Body, resp.StatusCode)
@@ -163,10 +164,14 @@ func (c *Client) UploadFile(ctx context.Context, a *auth.RequestAuth, req Upload
 					continue
 				}
 			}
-			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(resp.StatusCode, code, bizCode, msg, bizMsg)) {
+			penalty := penaltyForFailedStatus(resp.StatusCode, code, bizCode, msg, bizMsg)
+			if switchAccountAfterPenalty(ctx, a, penalty) {
 				refreshed = false
 				attempts++
 				continue
+			}
+			if penalty != account.PenaltyUnknown {
+				return nil, &RequestFailure{Op: "upload file", Kind: lastFailureKind, Message: lastFailureMessage}
 			}
 		}
 		attempts++

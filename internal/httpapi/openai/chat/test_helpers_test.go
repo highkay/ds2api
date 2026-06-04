@@ -14,6 +14,7 @@ type mockOpenAIConfig struct {
 	aliases             map[string]string
 	wideInput           bool
 	autoDeleteMode      string
+	allowAutoDeleteAll  bool
 	toolMode            string
 	earlyEmit           string
 	responsesTTL        int
@@ -39,6 +40,9 @@ func (m mockOpenAIConfig) AutoDeleteMode() string {
 }
 func (m mockOpenAIConfig) AutoDeleteSessions() bool  { return false }
 func (m mockOpenAIConfig) HistorySplitEnabled() bool { return m.historySplitEnabled }
+func (m mockOpenAIConfig) RuntimeAllowAutoDeleteAll() bool {
+	return m.allowAutoDeleteAll
+}
 func (m mockOpenAIConfig) HistorySplitTriggerAfterTurns() int {
 	if m.historySplitTurns <= 0 {
 		return 1

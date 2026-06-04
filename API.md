@@ -709,7 +709,7 @@ data: {"type":"message_stop"}
 
 - `success`
 - `admin`（`has_password_hash`、`jwt_expire_hours`、`jwt_valid_after_unix`、`default_password_warning`）
-- `runtime`（`account_max_inflight`、`account_max_queue`、`global_max_inflight`、`token_refresh_interval_hours`、`disable_upstream_file_uploads`、`account_health_*`）
+- `runtime`（账号并发/队列、调用方并发、上游尝试次数、重试开关、池级风险熔断、prompt / 文件数量预检、`disable_upstream_file_uploads`、`account_health_*`）
 - `compat`（`wide_input_strict_output`、`strip_reference_markers`）
 - `responses` / `embeddings`
 - `auto_delete`（`mode`：`none` / `single` / `all`；旧配置 `sessions=true` 仍按 `all` 处理）
@@ -720,6 +720,12 @@ data: {"type":"message_stop"}
 
 默认情况下，`runtime.account_max_inflight=1`、`runtime.account_max_queue=0`。`account_max_queue=0` 表示禁用等待队列；当所有账号并发槽位占满时，请求会直接返回 HTTP `429`，OpenAI 兼容响应的 `error.code` 为 `account_pool_busy`。
 
+默认风控策略偏保守：`runtime.upstream_max_attempts=1`，`runtime.retry_after_muted` / `retry_after_http_429` / `retry_after_http_403` / `retry_after_network` / `retry_after_http_5xx` 均为 `false`。命中禁言、上游 `429`、上游 `403`、网络或 5xx 失败时，托管账号模式默认记录惩罚并返回错误，不会马上换下一个账号继续重试。
+
+`runtime.risk_breaker_enabled=true` 时，禁言、上游 `429`、上游 `403` 会进入池级风险熔断。默认 10 分钟窗口内任一禁言冷却 1 小时，2 次禁言冷却 6 小时，5 次上游 `429` 或 2 次上游 `403` 冷却 15 分钟。熔断期间账号池不再分配账号，`/admin/queue/status` 的 `risk` 字段会返回 `cooling_down`、`reason`、剩余时间与事件计数。
+
+`runtime.caller_max_inflight` 默认限制同一客户端凭据最多 2 个托管账号请求并发。`runtime.max_prompt_chars`、`runtime.max_ref_files_per_request`、`runtime.max_inline_files_per_request` 会在触达 DeepSeek 前做本地 `413` 拦截。`runtime.allow_auto_delete_all=false` 时，`auto_delete.mode=all` 会在运行时降级为 `single`。
+
 > `runtime.account_mute_scan_interval_seconds` 是配置文件字段，不属于 `/admin/settings` 热更新范围。它控制本地长进程后台 `/api/v0/users/current` 禁言扫描间隔，默认 `43200` 秒；Vercel Serverless 不运行该后台扫描器。
 
 ### `PUT /admin/settings`
@@ -728,6 +734,13 @@ data: {"type":"message_stop"}
 
 - `admin.jwt_expire_hours`
 - `runtime.account_max_inflight` / `runtime.account_max_queue` / `runtime.global_max_inflight` / `runtime.token_refresh_interval_hours`
+- `runtime.upstream_max_attempts`
+- `runtime.retry_after_muted` / `runtime.retry_after_http_429` / `runtime.retry_after_http_403` / `runtime.retry_after_network` / `runtime.retry_after_http_5xx`
+- `runtime.allow_cooldown_account_fallback`
+- `runtime.risk_breaker_enabled` 与 `runtime.risk_breaker_*`
+- `runtime.caller_max_inflight`
+- `runtime.max_prompt_chars` / `runtime.max_ref_files_per_request` / `runtime.max_inline_files_per_request`
+- `runtime.allow_auto_delete_all`
 - `runtime.disable_upstream_file_uploads`
 - `runtime.account_health_enabled` 与 `runtime.account_health_*_seconds` 冷却/恢复参数
 - `compat.wide_input_strict_output` / `compat.strip_reference_markers`
@@ -759,7 +772,7 @@ data: {"type":"message_stop"}
 
 请求可直接传配置对象，或使用 `{"config": {...}, "mode":"merge"}` 包裹格式。
 也支持在查询参数里传 `?mode=merge` / `?mode=replace`。
-`replace` 模式会按完整配置结构替换（保留 Vercel 同步元信息）；`merge` 模式会合并 `keys`、`api_keys`、`accounts`、`model_aliases`，并覆盖 `admin`、`runtime`、`responses`、`embeddings` 中的非空字段。`compat`、`auto_delete`、`history_split` 建议通过 `/admin/settings` 或配置文件管理；`toolcall` 相关字段会被忽略。
+`replace` 模式会按完整配置结构替换（保留 Vercel 同步元信息）；`merge` 模式会合并 `keys`、`api_keys`、`accounts`、`model_aliases`，并覆盖 `admin`、`runtime`、`responses`、`embeddings` 中的非空字段。`runtime` 中的布尔字段会按请求体字段是否出现来合并，因此显式 `false` 会覆盖旧值。`compat`、`auto_delete`、`history_split` 建议通过 `/admin/settings` 或配置文件管理；`toolcall` 相关字段会被忽略。
 
 `merge` 模式下，`runtime.account_max_queue=0` 是显式值，会覆盖已有队列上限。
 

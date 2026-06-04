@@ -13,6 +13,7 @@ import (
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/riskguard"
 	"ds2api/internal/util"
 
 	"github.com/google/uuid"
@@ -76,8 +77,14 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 		writeOpenAIError(w, status, message)
 		return
 	}
+	if err := riskguard.CheckCompletion(h.Store, stdReq.FinalPrompt, stdReq.RefFileIDs); err != nil {
+		status, _, message, _ := riskguard.ErrorDetail(err)
+		writeOpenAIError(w, status, message)
+		return
+	}
 
-	sessionID, err := h.DS.CreateSession(r.Context(), a, 3)
+	maxAttempts := config.RuntimeUpstreamMaxAttemptsFrom(h.Store)
+	sessionID, err := h.DS.CreateSession(r.Context(), a, maxAttempts)
 	if err != nil {
 		if a.UseConfigToken {
 			writeOpenAIError(w, http.StatusUnauthorized, "Account token is invalid. Please re-login the account in admin.")
@@ -86,7 +93,7 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
-	powHeader, err := h.DS.GetPow(r.Context(), a, 3)
+	powHeader, err := h.DS.GetPow(r.Context(), a, maxAttempts)
 	if err != nil {
 		writeOpenAIError(w, http.StatusUnauthorized, "Failed to get PoW (invalid token or unknown error).")
 		return

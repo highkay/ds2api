@@ -57,12 +57,14 @@ func TestChatCompletionsAutoDeleteModes(t *testing.T) {
 	tests := []struct {
 		name       string
 		mode       string
+		allowAll   bool
 		wantSingle int
 		wantAll    int
 	}{
 		{name: "none", mode: "none"},
 		{name: "single", mode: "single", wantSingle: 1},
-		{name: "all", mode: "all", wantAll: 1},
+		{name: "all-default-blocked", mode: "all", wantSingle: 1},
+		{name: "all-explicitly-allowed", mode: "all", allowAll: true, wantAll: 1},
 	}
 
 	for _, tc := range tests {
@@ -75,8 +77,9 @@ func TestChatCompletionsAutoDeleteModes(t *testing.T) {
 			}
 			h := &Handler{
 				Store: mockOpenAIConfig{
-					wideInput:      true,
-					autoDeleteMode: tc.mode,
+					wideInput:          true,
+					autoDeleteMode:     tc.mode,
+					allowAutoDeleteAll: tc.allowAll,
 				},
 				Auth: streamStatusAuthStub{},
 				DS:   ds,

@@ -28,7 +28,7 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 		c.attachHifLeimHeader(ctx, a, headers)
 		resp, err := c.streamPost(ctx, clients.stream, dsprotocol.DeepSeekCompletionURL, headers, payload)
 		if err != nil {
-			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+			if switchAccountAfterPenalty(ctx, a, account.PenaltyNetwork) {
 				nextPow, powErr := c.GetPow(ctx, a, maxAttempts)
 				if powErr != nil {
 					return nil, powErr
@@ -37,10 +37,11 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 				headers = c.authHeaders(a.DeepSeekToken)
 				headers["x-ds-pow-response"] = nextPow
 				powResp = nextPow
+				attempts++
+				time.Sleep(time.Second)
+				continue
 			}
-			attempts++
-			time.Sleep(time.Second)
-			continue
+			return nil, err
 		}
 		if resp.StatusCode == http.StatusOK {
 			muted, muteErr := c.detectCompletionMute(ctx, a, resp)
@@ -71,8 +72,11 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 			resp.Body = captureSession.WrapBody(resp.Body, resp.StatusCode)
 		}
 		penalty := completionPenaltyForStatus(resp.StatusCode)
-		_ = resp.Body.Close()
-		if a.UseConfigToken && penalty != account.PenaltyUnknown && c.Auth.SwitchAccountWithPenalty(ctx, a, penalty) {
+		if penalty == account.PenaltyUnknown {
+			return resp, nil
+		}
+		if switchAccountAfterPenalty(ctx, a, penalty) {
+			_ = resp.Body.Close()
 			nextPow, powErr := c.GetPow(ctx, a, maxAttempts)
 			if powErr != nil {
 				return nil, powErr
@@ -81,9 +85,11 @@ func (c *Client) CallCompletion(ctx context.Context, a *auth.RequestAuth, payloa
 			headers = c.authHeaders(a.DeepSeekToken)
 			headers["x-ds-pow-response"] = nextPow
 			powResp = nextPow
+			attempts++
+			time.Sleep(time.Second)
+			continue
 		}
-		attempts++
-		time.Sleep(time.Second)
+		return resp, nil
 	}
 	return nil, errors.New("completion failed")
 }

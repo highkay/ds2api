@@ -10,9 +10,47 @@ import {
 
 const MAX_AUTO_FETCH_FAILURES = 3
 
+const DEFAULT_RUNTIME = {
+    account_max_inflight: 1,
+    account_max_queue: 0,
+    global_max_inflight: 1,
+    token_refresh_interval_hours: 6,
+    upstream_max_attempts: 1,
+    retry_after_muted: false,
+    retry_after_http_429: false,
+    retry_after_http_403: false,
+    retry_after_network: false,
+    retry_after_http_5xx: false,
+    allow_cooldown_account_fallback: false,
+    risk_breaker_enabled: true,
+    risk_breaker_window_seconds: 600,
+    risk_breaker_mute_cooldown_seconds: 3600,
+    risk_breaker_hard_mute_count: 2,
+    risk_breaker_hard_cooldown_seconds: 21600,
+    risk_breaker_http_429_threshold: 5,
+    risk_breaker_http_403_threshold: 2,
+    risk_breaker_soft_cooldown_seconds: 900,
+    caller_max_inflight: 2,
+    max_prompt_chars: 60000,
+    max_ref_files_per_request: 8,
+    max_inline_files_per_request: 4,
+    allow_auto_delete_all: false,
+    disable_upstream_file_uploads: false,
+    account_health_enabled: true,
+    account_health_recovery_window_seconds: 900,
+    account_health_max_cooldown_seconds: 21600,
+    account_health_cooldown_429_seconds: 900,
+    account_health_cooldown_403_seconds: 3600,
+    account_health_cooldown_auth_seconds: 3600,
+    account_health_cooldown_5xx_seconds: 120,
+    account_health_cooldown_network_seconds: 30,
+    account_health_cooldown_empty_seconds: 300,
+    account_health_cooldown_muted_seconds: 3600,
+}
+
 const DEFAULT_FORM = {
     admin: { jwt_expire_hours: 24 },
-    runtime: { account_max_inflight: 1, account_max_queue: 0, global_max_inflight: 1, token_refresh_interval_hours: 6 },
+    runtime: DEFAULT_RUNTIME,
     compat: { strip_reference_markers: true },
     responses: { store_ttl_seconds: 900 },
     embeddings: { provider: '' },
@@ -49,14 +87,54 @@ function normalizeAutoDeleteMode(raw) {
     return 'none'
 }
 
+function runtimeNumber(runtime, key) {
+    return Number(runtime?.[key] ?? DEFAULT_RUNTIME[key])
+}
+
+function runtimeBool(runtime, key) {
+    return Boolean(runtime?.[key] ?? DEFAULT_RUNTIME[key])
+}
+
 function fromServerForm(data) {
+    const runtime = data.runtime || {}
     return {
         admin: { jwt_expire_hours: Number(data.admin?.jwt_expire_hours ?? 24) },
         runtime: {
-            account_max_inflight: Number(data.runtime?.account_max_inflight ?? 1),
-            account_max_queue: Number(data.runtime?.account_max_queue ?? 0),
-            global_max_inflight: Number(data.runtime?.global_max_inflight ?? 1),
-            token_refresh_interval_hours: Number(data.runtime?.token_refresh_interval_hours ?? 6),
+            account_max_inflight: runtimeNumber(runtime, 'account_max_inflight'),
+            account_max_queue: runtimeNumber(runtime, 'account_max_queue'),
+            global_max_inflight: runtimeNumber(runtime, 'global_max_inflight'),
+            token_refresh_interval_hours: runtimeNumber(runtime, 'token_refresh_interval_hours'),
+            upstream_max_attempts: runtimeNumber(runtime, 'upstream_max_attempts'),
+            retry_after_muted: runtimeBool(runtime, 'retry_after_muted'),
+            retry_after_http_429: runtimeBool(runtime, 'retry_after_http_429'),
+            retry_after_http_403: runtimeBool(runtime, 'retry_after_http_403'),
+            retry_after_network: runtimeBool(runtime, 'retry_after_network'),
+            retry_after_http_5xx: runtimeBool(runtime, 'retry_after_http_5xx'),
+            allow_cooldown_account_fallback: runtimeBool(runtime, 'allow_cooldown_account_fallback'),
+            risk_breaker_enabled: runtimeBool(runtime, 'risk_breaker_enabled'),
+            risk_breaker_window_seconds: runtimeNumber(runtime, 'risk_breaker_window_seconds'),
+            risk_breaker_mute_cooldown_seconds: runtimeNumber(runtime, 'risk_breaker_mute_cooldown_seconds'),
+            risk_breaker_hard_mute_count: runtimeNumber(runtime, 'risk_breaker_hard_mute_count'),
+            risk_breaker_hard_cooldown_seconds: runtimeNumber(runtime, 'risk_breaker_hard_cooldown_seconds'),
+            risk_breaker_http_429_threshold: runtimeNumber(runtime, 'risk_breaker_http_429_threshold'),
+            risk_breaker_http_403_threshold: runtimeNumber(runtime, 'risk_breaker_http_403_threshold'),
+            risk_breaker_soft_cooldown_seconds: runtimeNumber(runtime, 'risk_breaker_soft_cooldown_seconds'),
+            caller_max_inflight: runtimeNumber(runtime, 'caller_max_inflight'),
+            max_prompt_chars: runtimeNumber(runtime, 'max_prompt_chars'),
+            max_ref_files_per_request: runtimeNumber(runtime, 'max_ref_files_per_request'),
+            max_inline_files_per_request: runtimeNumber(runtime, 'max_inline_files_per_request'),
+            allow_auto_delete_all: runtimeBool(runtime, 'allow_auto_delete_all'),
+            disable_upstream_file_uploads: runtimeBool(runtime, 'disable_upstream_file_uploads'),
+            account_health_enabled: runtimeBool(runtime, 'account_health_enabled'),
+            account_health_recovery_window_seconds: runtimeNumber(runtime, 'account_health_recovery_window_seconds'),
+            account_health_max_cooldown_seconds: runtimeNumber(runtime, 'account_health_max_cooldown_seconds'),
+            account_health_cooldown_429_seconds: runtimeNumber(runtime, 'account_health_cooldown_429_seconds'),
+            account_health_cooldown_403_seconds: runtimeNumber(runtime, 'account_health_cooldown_403_seconds'),
+            account_health_cooldown_auth_seconds: runtimeNumber(runtime, 'account_health_cooldown_auth_seconds'),
+            account_health_cooldown_5xx_seconds: runtimeNumber(runtime, 'account_health_cooldown_5xx_seconds'),
+            account_health_cooldown_network_seconds: runtimeNumber(runtime, 'account_health_cooldown_network_seconds'),
+            account_health_cooldown_empty_seconds: runtimeNumber(runtime, 'account_health_cooldown_empty_seconds'),
+            account_health_cooldown_muted_seconds: runtimeNumber(runtime, 'account_health_cooldown_muted_seconds'),
         },
         compat: {
             strip_reference_markers: data.compat?.strip_reference_markers ?? true,
@@ -79,13 +157,45 @@ function fromServerForm(data) {
 }
 
 function toServerPayload(form) {
+    const runtime = form.runtime || DEFAULT_RUNTIME
     return {
         admin: { jwt_expire_hours: Number(form.admin.jwt_expire_hours) },
         runtime: {
-            account_max_inflight: Number(form.runtime.account_max_inflight),
-            account_max_queue: Number(form.runtime.account_max_queue),
-            global_max_inflight: Number(form.runtime.global_max_inflight),
-            token_refresh_interval_hours: Number(form.runtime.token_refresh_interval_hours),
+            account_max_inflight: Number(runtime.account_max_inflight),
+            account_max_queue: Number(runtime.account_max_queue),
+            global_max_inflight: Number(runtime.global_max_inflight),
+            token_refresh_interval_hours: Number(runtime.token_refresh_interval_hours),
+            upstream_max_attempts: Number(runtime.upstream_max_attempts),
+            retry_after_muted: Boolean(runtime.retry_after_muted),
+            retry_after_http_429: Boolean(runtime.retry_after_http_429),
+            retry_after_http_403: Boolean(runtime.retry_after_http_403),
+            retry_after_network: Boolean(runtime.retry_after_network),
+            retry_after_http_5xx: Boolean(runtime.retry_after_http_5xx),
+            allow_cooldown_account_fallback: Boolean(runtime.allow_cooldown_account_fallback),
+            risk_breaker_enabled: Boolean(runtime.risk_breaker_enabled),
+            risk_breaker_window_seconds: Number(runtime.risk_breaker_window_seconds),
+            risk_breaker_mute_cooldown_seconds: Number(runtime.risk_breaker_mute_cooldown_seconds),
+            risk_breaker_hard_mute_count: Number(runtime.risk_breaker_hard_mute_count),
+            risk_breaker_hard_cooldown_seconds: Number(runtime.risk_breaker_hard_cooldown_seconds),
+            risk_breaker_http_429_threshold: Number(runtime.risk_breaker_http_429_threshold),
+            risk_breaker_http_403_threshold: Number(runtime.risk_breaker_http_403_threshold),
+            risk_breaker_soft_cooldown_seconds: Number(runtime.risk_breaker_soft_cooldown_seconds),
+            caller_max_inflight: Number(runtime.caller_max_inflight),
+            max_prompt_chars: Number(runtime.max_prompt_chars),
+            max_ref_files_per_request: Number(runtime.max_ref_files_per_request),
+            max_inline_files_per_request: Number(runtime.max_inline_files_per_request),
+            allow_auto_delete_all: Boolean(runtime.allow_auto_delete_all),
+            disable_upstream_file_uploads: Boolean(runtime.disable_upstream_file_uploads),
+            account_health_enabled: Boolean(runtime.account_health_enabled),
+            account_health_recovery_window_seconds: Number(runtime.account_health_recovery_window_seconds),
+            account_health_max_cooldown_seconds: Number(runtime.account_health_max_cooldown_seconds),
+            account_health_cooldown_429_seconds: Number(runtime.account_health_cooldown_429_seconds),
+            account_health_cooldown_403_seconds: Number(runtime.account_health_cooldown_403_seconds),
+            account_health_cooldown_auth_seconds: Number(runtime.account_health_cooldown_auth_seconds),
+            account_health_cooldown_5xx_seconds: Number(runtime.account_health_cooldown_5xx_seconds),
+            account_health_cooldown_network_seconds: Number(runtime.account_health_cooldown_network_seconds),
+            account_health_cooldown_empty_seconds: Number(runtime.account_health_cooldown_empty_seconds),
+            account_health_cooldown_muted_seconds: Number(runtime.account_health_cooldown_muted_seconds),
         },
         compat: {
             strip_reference_markers: Boolean(form.compat?.strip_reference_markers ?? true),

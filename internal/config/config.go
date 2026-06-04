@@ -170,6 +170,26 @@ type RuntimeConfig struct {
 	GlobalMaxInflight                   int   `json:"global_max_inflight,omitempty"`
 	TokenRefreshIntervalHours           int   `json:"token_refresh_interval_hours,omitempty"`
 	AccountMuteScanIntervalSeconds      int   `json:"account_mute_scan_interval_seconds,omitempty"`
+	UpstreamMaxAttempts                 int   `json:"upstream_max_attempts,omitempty"`
+	RetryAfterMuted                     *bool `json:"retry_after_muted,omitempty"`
+	RetryAfterHTTP429                   *bool `json:"retry_after_http_429,omitempty"`
+	RetryAfterHTTP403                   *bool `json:"retry_after_http_403,omitempty"`
+	RetryAfterNetwork                   *bool `json:"retry_after_network,omitempty"`
+	RetryAfterHTTP5xx                   *bool `json:"retry_after_http_5xx,omitempty"`
+	AllowCooldownAccountFallback        *bool `json:"allow_cooldown_account_fallback,omitempty"`
+	RiskBreakerEnabled                  *bool `json:"risk_breaker_enabled,omitempty"`
+	RiskBreakerWindowSeconds            int   `json:"risk_breaker_window_seconds,omitempty"`
+	RiskBreakerMuteCooldownSeconds      int   `json:"risk_breaker_mute_cooldown_seconds,omitempty"`
+	RiskBreakerHardMuteCount            int   `json:"risk_breaker_hard_mute_count,omitempty"`
+	RiskBreakerHardCooldownSeconds      int   `json:"risk_breaker_hard_cooldown_seconds,omitempty"`
+	RiskBreakerHTTP429Threshold         int   `json:"risk_breaker_http_429_threshold,omitempty"`
+	RiskBreakerHTTP403Threshold         int   `json:"risk_breaker_http_403_threshold,omitempty"`
+	RiskBreakerSoftCooldownSeconds      int   `json:"risk_breaker_soft_cooldown_seconds,omitempty"`
+	CallerMaxInflight                   int   `json:"caller_max_inflight,omitempty"`
+	MaxPromptChars                      int   `json:"max_prompt_chars,omitempty"`
+	MaxRefFilesPerRequest               int   `json:"max_ref_files_per_request,omitempty"`
+	MaxInlineFilesPerRequest            int   `json:"max_inline_files_per_request,omitempty"`
+	AllowAutoDeleteAll                  *bool `json:"allow_auto_delete_all,omitempty"`
 	DisableUpstreamFileUploads          *bool `json:"disable_upstream_file_uploads,omitempty"`
 	AccountHealthEnabled                *bool `json:"account_health_enabled,omitempty"`
 	AccountHealthRecoveryWindowSeconds  int   `json:"account_health_recovery_window_seconds,omitempty"`

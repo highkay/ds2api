@@ -21,6 +21,11 @@ type Pool struct {
 	globalMaxInflight      int
 	healthCfg              healthConfig
 	health                 map[string]*accountHealth
+	riskCfg                riskConfig
+	riskEvents             []riskEvent
+	riskCooldownUntil      time.Time
+	riskCooldownReason     string
+	allowCooldownFallback  bool
 	rng                    *rand.Rand
 	now                    func() time.Time
 }
@@ -36,11 +41,14 @@ func NewPool(store *config.Store) *Pool {
 		maxInflightPerAccount: maxPer,
 		health:                map[string]*accountHealth{},
 		healthCfg:             DefaultHealthConfig().toInternal(),
+		riskCfg:               DefaultRiskConfig().toInternal(),
 		rng:                   rand.New(rand.NewSource(time.Now().UnixNano())),
 		now:                   time.Now,
 	}
 	if store != nil {
 		p.healthCfg = LoadHealthConfigFromStore(store).toInternal()
+		p.riskCfg = LoadRiskConfigFromStore(store).toInternal()
+		p.allowCooldownFallback = store.RuntimeAllowCooldownAccountFallback()
 	}
 	p.Reset()
 	return p
@@ -88,8 +96,11 @@ func (p *Pool) Reset() {
 	p.globalMaxInflight = globalLimit
 	if p.store != nil {
 		p.healthCfg = LoadHealthConfigFromStore(p.store).toInternal()
+		p.riskCfg = LoadRiskConfigFromStore(p.store).toInternal()
+		p.allowCooldownFallback = p.store.RuntimeAllowCooldownAccountFallback()
 	}
 	p.pruneHealthLocked(ids)
+	p.pruneRiskEventsLocked(p.now())
 	config.Logger.Info(
 		"[init_account_queue] initialized",
 		"total", len(ids),
@@ -98,6 +109,8 @@ func (p *Pool) Reset() {
 		"recommended_concurrency", p.recommendedConcurrency,
 		"max_queue_size", p.maxQueueSize,
 		"health_enabled", p.healthCfg.enabled,
+		"risk_breaker_enabled", p.riskCfg.enabled,
+		"allow_cooldown_fallback", p.allowCooldownFallback,
 	)
 }
 
@@ -126,11 +139,14 @@ func (p *Pool) Penalize(accountID string, kind PenaltyKind) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if !p.healthCfg.enabled {
-		return
+	now := p.now()
+	if event, ok := RiskEventFromPenalty(kind); ok {
+		p.recordRiskEventLocked(event, accountID, "", "", now)
 	}
-	h := p.healthLocked(accountID)
-	h.applyPenalty(p.healthCfg, kind, p.now())
+	if p.healthCfg.enabled {
+		h := p.healthLocked(accountID)
+		h.applyPenalty(p.healthCfg, kind, now)
+	}
 }
 
 func (p *Pool) RecordSuccess(accountID string) {
@@ -243,24 +259,27 @@ func (p *Pool) Status() map[string]any {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := p.now()
+	risk := p.riskStatusLocked(now)
 	available := make([]string, 0, len(p.queue))
 	inUseAccounts := make([]string, 0, len(p.inUse))
 	inUseSlots := 0
-	for _, id := range p.queue {
-		if p.inUse[id] >= p.maxInflightPerAccount {
-			continue
-		}
-		if p.store != nil {
-			if _, ok := p.store.FindAvailableAccount(id, now); !ok {
+	if !p.riskCoolingDownLocked(now) {
+		for _, id := range p.queue {
+			if p.inUse[id] >= p.maxInflightPerAccount {
 				continue
 			}
-		}
-		if p.healthCfg.enabled {
-			if h := p.health[id]; h != nil && h.cooldownRemaining(now) > 0 {
-				continue
+			if p.store != nil {
+				if _, ok := p.store.FindAvailableAccount(id, now); !ok {
+					continue
+				}
 			}
+			if p.healthCfg.enabled {
+				if h := p.health[id]; h != nil && h.cooldownRemaining(now) > 0 {
+					continue
+				}
+			}
+			available = append(available, id)
 		}
-		available = append(available, id)
 	}
 	for id, count := range p.inUse {
 		if count > 0 {
@@ -285,6 +304,8 @@ func (p *Pool) Status() map[string]any {
 		"waiting":                  len(p.waiters),
 		"max_queue_size":           p.maxQueueSize,
 		"health_enabled":           p.healthCfg.enabled,
+		"allow_cooldown_fallback":  p.allowCooldownFallback,
+		"risk":                     risk,
 		"accounts":                 p.healthSnapshotLocked(now),
 	}
 }

@@ -35,15 +35,15 @@ type HealthConfig struct {
 func DefaultHealthConfig() HealthConfig {
 	return HealthConfig{
 		Enabled:                true,
-		RecoveryWindowSeconds:  300,
-		MaxCooldownSeconds:     1800,
-		Cooldown429Seconds:     30,
-		Cooldown403Seconds:     60,
-		CooldownAuthSeconds:    120,
-		Cooldown5xxSeconds:     10,
-		CooldownNetworkSeconds: 5,
-		CooldownEmptySeconds:   0,
-		CooldownMutedSeconds:   300,
+		RecoveryWindowSeconds:  900,
+		MaxCooldownSeconds:     21600,
+		Cooldown429Seconds:     900,
+		Cooldown403Seconds:     3600,
+		CooldownAuthSeconds:    3600,
+		Cooldown5xxSeconds:     120,
+		CooldownNetworkSeconds: 30,
+		CooldownEmptySeconds:   300,
+		CooldownMutedSeconds:   3600,
 	}
 }
 

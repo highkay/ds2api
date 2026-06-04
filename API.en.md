@@ -708,7 +708,7 @@ Reads runtime settings and status, including:
 
 - `success`
 - `admin` (`has_password_hash`, `jwt_expire_hours`, `jwt_valid_after_unix`, `default_password_warning`)
-- `runtime` (`account_max_inflight`, `account_max_queue`, `global_max_inflight`, `token_refresh_interval_hours`, `disable_upstream_file_uploads`, `account_health_*`)
+- `runtime` (account concurrency/queueing, caller concurrency, upstream attempt count, retry toggles, pool risk breaker, prompt/file preflight limits, `disable_upstream_file_uploads`, `account_health_*`)
 - `compat` (`wide_input_strict_output`, `strip_reference_markers`)
 - `responses` / `embeddings`
 - `auto_delete` (`mode`: `none` / `single` / `all`; legacy `sessions=true` is still treated as `all`)
@@ -719,6 +719,12 @@ Reads runtime settings and status, including:
 
 By default, `runtime.account_max_inflight=1` and `runtime.account_max_queue=0`. `account_max_queue=0` disables waiting; when all account concurrency slots are busy, requests return HTTP `429` immediately, and OpenAI-compatible responses use `error.code: "account_pool_busy"`.
 
+The default risk posture is conservative: `runtime.upstream_max_attempts=1`, and `runtime.retry_after_muted`, `retry_after_http_429`, `retry_after_http_403`, `retry_after_network`, and `retry_after_http_5xx` all default to `false`. In managed-account mode, mute, upstream `429`, upstream `403`, network, or 5xx failures are penalized and returned to the caller by default instead of immediately switching to another account.
+
+When `runtime.risk_breaker_enabled=true`, mute, upstream `429`, and upstream `403` events feed a pool-level risk breaker. Defaults: any mute in the 10-minute window cools the pool for 1 hour, 2 mute events cool it for 6 hours, and 5 upstream `429` or 2 upstream `403` events cool it for 15 minutes. During a breaker cooldown the account pool stops issuing accounts, and `/admin/queue/status` exposes `risk.cooling_down`, `reason`, remaining time, and event counters.
+
+`runtime.caller_max_inflight` limits one client credential to 2 managed-account requests by default. `runtime.max_prompt_chars`, `runtime.max_ref_files_per_request`, and `runtime.max_inline_files_per_request` reject risky requests locally with `413` before touching DeepSeek. When `runtime.allow_auto_delete_all=false`, `auto_delete.mode=all` is downgraded to `single` at runtime.
+
 > `runtime.account_mute_scan_interval_seconds` is a config-file field, not a hot-updated `/admin/settings` field. It controls the local long-running background `/api/v0/users/current` mute scan interval, defaults to `43200` seconds, and does not run on Vercel Serverless.
 
 ### `PUT /admin/settings`
@@ -727,6 +733,13 @@ Hot-updates runtime settings. Supported fields:
 
 - `admin.jwt_expire_hours`
 - `runtime.account_max_inflight` / `runtime.account_max_queue` / `runtime.global_max_inflight` / `runtime.token_refresh_interval_hours`
+- `runtime.upstream_max_attempts`
+- `runtime.retry_after_muted` / `runtime.retry_after_http_429` / `runtime.retry_after_http_403` / `runtime.retry_after_network` / `runtime.retry_after_http_5xx`
+- `runtime.allow_cooldown_account_fallback`
+- `runtime.risk_breaker_enabled` and `runtime.risk_breaker_*`
+- `runtime.caller_max_inflight`
+- `runtime.max_prompt_chars` / `runtime.max_ref_files_per_request` / `runtime.max_inline_files_per_request`
+- `runtime.allow_auto_delete_all`
 - `runtime.disable_upstream_file_uploads`
 - `runtime.account_health_enabled` and `runtime.account_health_*_seconds` cooldown/recovery fields
 - `compat.wide_input_strict_output` / `compat.strip_reference_markers`
@@ -758,7 +771,7 @@ Imports full config with:
 
 The request can send config directly, or wrapped as `{"config": {...}, "mode":"merge"}`.
 Query params `?mode=merge` / `?mode=replace` are also supported.
-`replace` mode replaces the full config shape while preserving Vercel sync metadata. `merge` mode merges `keys`, `api_keys`, `accounts`, and `model_aliases`, and overwrites non-empty fields under `admin`, `runtime`, `responses`, and `embeddings`. Manage `compat`, `auto_delete`, and `history_split` via `/admin/settings` or the config file; legacy `toolcall` fields are ignored.
+`replace` mode replaces the full config shape while preserving Vercel sync metadata. `merge` mode merges `keys`, `api_keys`, `accounts`, and `model_aliases`, and overwrites non-empty fields under `admin`, `runtime`, `responses`, and `embeddings`. Runtime boolean fields merge by field presence in the request body, so explicit `false` values overwrite older settings. Manage `compat`, `auto_delete`, and `history_split` via `/admin/settings` or the config file; legacy `toolcall` fields are ignored.
 
 In `merge` mode, `runtime.account_max_queue=0` is an explicit value and overwrites the existing queue limit.
 

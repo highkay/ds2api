@@ -6,6 +6,37 @@ import (
 	"strings"
 )
 
+func envIntInRange(name string, minValue, maxValue int) (int, bool) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < minValue || n > maxValue {
+		return 0, false
+	}
+	return n, true
+}
+
+func envBool(name string) (bool, bool) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return false, false
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, false
+	}
+	return v, true
+}
+
+func boolPtrDefault(v *bool, fallback bool) bool {
+	if v == nil {
+		return fallback
+	}
+	return *v
+}
+
 func (s *Store) ModelAliases() map[string]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -108,10 +139,8 @@ func (s *Store) RuntimeAccountMaxInflight() int {
 	if s.cfg.Runtime.AccountMaxInflight > 0 {
 		return s.cfg.Runtime.AccountMaxInflight
 	}
-	if raw := strings.TrimSpace(os.Getenv("DS2API_ACCOUNT_MAX_INFLIGHT")); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
-			return n
-		}
+	if n, ok := envIntInRange("DS2API_ACCOUNT_MAX_INFLIGHT", 1, 256); ok {
+		return n
 	}
 	return 1
 }
@@ -122,10 +151,8 @@ func (s *Store) RuntimeAccountMaxQueue(_ int) int {
 	if s.cfg.Runtime.AccountMaxQueue > 0 {
 		return s.cfg.Runtime.AccountMaxQueue
 	}
-	if raw := strings.TrimSpace(os.Getenv("DS2API_ACCOUNT_MAX_QUEUE")); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
-			return n
-		}
+	if n, ok := envIntInRange("DS2API_ACCOUNT_MAX_QUEUE", 0, 200000); ok {
+		return n
 	}
 	return 0
 }
@@ -136,10 +163,8 @@ func (s *Store) RuntimeGlobalMaxInflight(defaultSize int) int {
 	if s.cfg.Runtime.GlobalMaxInflight > 0 {
 		return s.cfg.Runtime.GlobalMaxInflight
 	}
-	if raw := strings.TrimSpace(os.Getenv("DS2API_GLOBAL_MAX_INFLIGHT")); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
-			return n
-		}
+	if n, ok := envIntInRange("DS2API_GLOBAL_MAX_INFLIGHT", 1, 200000); ok {
+		return n
 	}
 	if defaultSize < 0 {
 		return 0
@@ -165,6 +190,183 @@ func (s *Store) RuntimeAccountMuteScanIntervalSeconds() int {
 	return 43200
 }
 
+func (s *Store) RuntimeUpstreamMaxAttempts() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.UpstreamMaxAttempts > 0 {
+		return s.cfg.Runtime.UpstreamMaxAttempts
+	}
+	if n, ok := envIntInRange("DS2API_UPSTREAM_MAX_ATTEMPTS", 1, 5); ok {
+		return n
+	}
+	return 1
+}
+
+func (s *Store) RuntimeRetryAfterMuted() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := envBool("DS2API_RETRY_AFTER_MUTED"); ok {
+		return v
+	}
+	return boolPtrDefault(s.cfg.Runtime.RetryAfterMuted, false)
+}
+
+func (s *Store) RuntimeRetryAfterHTTP429() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := envBool("DS2API_RETRY_AFTER_HTTP_429"); ok {
+		return v
+	}
+	return boolPtrDefault(s.cfg.Runtime.RetryAfterHTTP429, false)
+}
+
+func (s *Store) RuntimeRetryAfterHTTP403() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := envBool("DS2API_RETRY_AFTER_HTTP_403"); ok {
+		return v
+	}
+	return boolPtrDefault(s.cfg.Runtime.RetryAfterHTTP403, false)
+}
+
+func (s *Store) RuntimeRetryAfterNetwork() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := envBool("DS2API_RETRY_AFTER_NETWORK"); ok {
+		return v
+	}
+	return boolPtrDefault(s.cfg.Runtime.RetryAfterNetwork, false)
+}
+
+func (s *Store) RuntimeRetryAfterHTTP5xx() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := envBool("DS2API_RETRY_AFTER_HTTP_5XX"); ok {
+		return v
+	}
+	return boolPtrDefault(s.cfg.Runtime.RetryAfterHTTP5xx, false)
+}
+
+func (s *Store) RuntimeAllowCooldownAccountFallback() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := envBool("DS2API_ALLOW_COOLDOWN_ACCOUNT_FALLBACK"); ok {
+		return v
+	}
+	return boolPtrDefault(s.cfg.Runtime.AllowCooldownAccountFallback, false)
+}
+
+func (s *Store) RuntimeRiskBreakerEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return boolPtrDefault(s.cfg.Runtime.RiskBreakerEnabled, true)
+}
+
+func (s *Store) RuntimeRiskBreakerWindowSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.RiskBreakerWindowSeconds > 0 {
+		return s.cfg.Runtime.RiskBreakerWindowSeconds
+	}
+	return 600
+}
+
+func (s *Store) RuntimeRiskBreakerMuteCooldownSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.RiskBreakerMuteCooldownSeconds > 0 {
+		return s.cfg.Runtime.RiskBreakerMuteCooldownSeconds
+	}
+	return 3600
+}
+
+func (s *Store) RuntimeRiskBreakerHardMuteCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.RiskBreakerHardMuteCount > 0 {
+		return s.cfg.Runtime.RiskBreakerHardMuteCount
+	}
+	return 2
+}
+
+func (s *Store) RuntimeRiskBreakerHardCooldownSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.RiskBreakerHardCooldownSeconds > 0 {
+		return s.cfg.Runtime.RiskBreakerHardCooldownSeconds
+	}
+	return 21600
+}
+
+func (s *Store) RuntimeRiskBreakerHTTP429Threshold() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.RiskBreakerHTTP429Threshold > 0 {
+		return s.cfg.Runtime.RiskBreakerHTTP429Threshold
+	}
+	return 5
+}
+
+func (s *Store) RuntimeRiskBreakerHTTP403Threshold() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.RiskBreakerHTTP403Threshold > 0 {
+		return s.cfg.Runtime.RiskBreakerHTTP403Threshold
+	}
+	return 2
+}
+
+func (s *Store) RuntimeRiskBreakerSoftCooldownSeconds() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.RiskBreakerSoftCooldownSeconds > 0 {
+		return s.cfg.Runtime.RiskBreakerSoftCooldownSeconds
+	}
+	return 900
+}
+
+func (s *Store) RuntimeCallerMaxInflight() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.CallerMaxInflight > 0 {
+		return s.cfg.Runtime.CallerMaxInflight
+	}
+	return 2
+}
+
+func (s *Store) RuntimeMaxPromptChars() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.MaxPromptChars > 0 {
+		return s.cfg.Runtime.MaxPromptChars
+	}
+	return 60000
+}
+
+func (s *Store) RuntimeMaxRefFilesPerRequest() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.MaxRefFilesPerRequest > 0 {
+		return s.cfg.Runtime.MaxRefFilesPerRequest
+	}
+	return 8
+}
+
+func (s *Store) RuntimeMaxInlineFilesPerRequest() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.MaxInlineFilesPerRequest > 0 {
+		return s.cfg.Runtime.MaxInlineFilesPerRequest
+	}
+	return 4
+}
+
+func (s *Store) RuntimeAllowAutoDeleteAll() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return boolPtrDefault(s.cfg.Runtime.AllowAutoDeleteAll, false)
+}
+
 func (s *Store) UpstreamFileUploadsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -183,6 +385,69 @@ func UpstreamFileUploadsEnabledFrom(reader any) bool {
 		return r.UpstreamFileUploadsEnabled()
 	}
 	return true
+}
+
+type runtimeUpstreamMaxAttemptsReader interface {
+	RuntimeUpstreamMaxAttempts() int
+}
+
+func RuntimeUpstreamMaxAttemptsFrom(reader any) int {
+	if r, ok := reader.(runtimeUpstreamMaxAttemptsReader); ok {
+		if n := r.RuntimeUpstreamMaxAttempts(); n > 0 {
+			return n
+		}
+	}
+	return 1
+}
+
+type runtimeMaxPromptCharsReader interface {
+	RuntimeMaxPromptChars() int
+}
+
+func RuntimeMaxPromptCharsFrom(reader any) int {
+	if r, ok := reader.(runtimeMaxPromptCharsReader); ok {
+		if n := r.RuntimeMaxPromptChars(); n > 0 {
+			return n
+		}
+	}
+	return 60000
+}
+
+type runtimeMaxRefFilesPerRequestReader interface {
+	RuntimeMaxRefFilesPerRequest() int
+}
+
+func RuntimeMaxRefFilesPerRequestFrom(reader any) int {
+	if r, ok := reader.(runtimeMaxRefFilesPerRequestReader); ok {
+		if n := r.RuntimeMaxRefFilesPerRequest(); n > 0 {
+			return n
+		}
+	}
+	return 8
+}
+
+type runtimeMaxInlineFilesPerRequestReader interface {
+	RuntimeMaxInlineFilesPerRequest() int
+}
+
+func RuntimeMaxInlineFilesPerRequestFrom(reader any) int {
+	if r, ok := reader.(runtimeMaxInlineFilesPerRequestReader); ok {
+		if n := r.RuntimeMaxInlineFilesPerRequest(); n > 0 {
+			return n
+		}
+	}
+	return 4
+}
+
+type runtimeAllowAutoDeleteAllReader interface {
+	RuntimeAllowAutoDeleteAll() bool
+}
+
+func RuntimeAllowAutoDeleteAllFrom(reader any) bool {
+	if r, ok := reader.(runtimeAllowAutoDeleteAllReader); ok {
+		return r.RuntimeAllowAutoDeleteAll()
+	}
+	return false
 }
 
 func (s *Store) AccountHealthEnabled() bool {

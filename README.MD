@@ -276,7 +276,7 @@ go run ./cmd/ds2api
 - `keys` / `api_keys`：客户端访问密钥，`api_keys` 支持 `name` 与 `remark` 元信息，`keys` 继续兼容。
 - `accounts`：DeepSeek 托管账号，支持 `email` 或 `mobile` 登录，可配置代理、名称和备注。
 - `model_aliases`：OpenAI / Claude / Gemini 共用的模型 alias 映射。
-- `runtime`：账号并发、队列、token 刷新、账号健康冷却、上游文件上传开关，以及本地后台禁言扫描间隔；其中 `account_mute_scan_interval_seconds` 只随配置/重启生效，不通过 Admin Settings 热更新。
+- `runtime`：账号并发、队列、token 刷新、调用方并发、上游尝试次数、重试策略、账号健康冷却、池级风险熔断、prompt / 文件数量预检、上游文件上传开关，以及本地后台禁言扫描间隔；其中 `account_mute_scan_interval_seconds` 只随配置/重启生效，不通过 Admin Settings 热更新。
 - `auto_delete.mode`：请求结束后的远端会话清理策略，支持 `none` / `single` / `all`。
 - `history_split`：多轮历史拆分策略，已全局强制开启；可调整触发阈值，避免长历史全部内联进 prompt。
 
@@ -308,6 +308,18 @@ Gemini 路由还可以使用 `x-goog-api-key`，或在没有认证头时使用 `
 - OpenAI 兼容响应的 `error.code` 为 `account_pool_busy`
 - 如需排队等待，可显式设置 `DS2API_ACCOUNT_MAX_QUEUE` 或 `runtime.account_max_queue` 为正数
 - `GET /admin/queue/status` 返回实时并发状态
+
+## 账号风控保护
+
+DS2API 默认按 DeepSeek Web 账号安全优先处理上游异常：
+
+- `runtime.upstream_max_attempts` 默认 `1`，同一次请求不会在上游失败后反复尝试。
+- `runtime.retry_after_muted`、`retry_after_http_429`、`retry_after_http_403`、`retry_after_network`、`retry_after_http_5xx` 默认都是 `false`；命中这些失败时会记录账号惩罚并返回错误，而不是立刻换下一个账号继续打。
+- `runtime.risk_breaker_enabled=true` 时，禁言、上游 `429`、上游 `403` 会进入池级风险熔断。默认任一禁言会冷却整个账号池 1 小时；10 分钟窗口内 2 次禁言会冷却 6 小时；5 次上游 `429` 或 2 次上游 `403` 会冷却 15 分钟。
+- `runtime.allow_cooldown_account_fallback=false` 时，不会在健康冷却中的账号里兜底挑号。
+- `runtime.caller_max_inflight` 默认限制同一客户端凭据最多 2 个托管账号请求并发，避免单个调用方打满账号池。
+- `runtime.max_prompt_chars`、`max_ref_files_per_request`、`max_inline_files_per_request` 会在触达 DeepSeek 前做本地 `413` 拦截，降低超长上下文、大量附件或 inline 文件触发 Web 风控的概率。
+- `auto_delete.mode=all` 默认被 `runtime.allow_auto_delete_all=false` 拦住并降级为 `single`，避免单次请求清理全部远端会话。
 
 ## Tool Call 适配
 

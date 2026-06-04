@@ -18,8 +18,6 @@ import (
 	"ds2api/internal/promptcompat"
 )
 
-const maxInlineFilesPerRequest = 50
-
 type inlineFileUploadError struct {
 	status  int
 	message string
@@ -162,8 +160,10 @@ func (s *inlineUploadState) tryUploadBlock(block map[string]any) (map[string]any
 	if !ok {
 		return nil, false, nil
 	}
-	if s.uploadCount >= maxInlineFilesPerRequest {
-		return nil, true, fmt.Errorf("exceeded maximum of %d inline files per request", maxInlineFilesPerRequest)
+	maxInlineFiles := config.RuntimeMaxInlineFilesPerRequestFrom(s.handler.Store)
+	if s.uploadCount >= maxInlineFiles {
+		err := fmt.Errorf("exceeded maximum of %d inline files per request", maxInlineFiles)
+		return nil, true, &inlineFileUploadError{status: http.StatusRequestEntityTooLarge, message: err.Error(), err: err}
 	}
 	fileID, err := s.uploadInlineFile(decoded)
 	if err != nil {
@@ -197,7 +197,7 @@ func (s *inlineUploadState) uploadInlineFile(file inlineDecodedFile) (string, er
 		Filename:    file.Filename,
 		ContentType: contentType,
 		Data:        file.Data,
-	}, 3)
+	}, config.RuntimeUpstreamMaxAttemptsFrom(s.handler.Store))
 	if err != nil {
 		return "", err
 	}

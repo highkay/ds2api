@@ -16,6 +16,7 @@ import (
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/riskguard"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
 )
@@ -90,8 +91,14 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, status, message)
 		return
 	}
+	if err := riskguard.CheckCompletion(h.Store, stdReq.FinalPrompt, stdReq.RefFileIDs); err != nil {
+		status, _, message, _ := riskguard.ErrorDetail(err)
+		writeOpenAIError(w, status, message)
+		return
+	}
 
-	sessionID, err := h.DS.CreateSession(r.Context(), a, 3)
+	maxAttempts := config.RuntimeUpstreamMaxAttemptsFrom(h.Store)
+	sessionID, err := h.DS.CreateSession(r.Context(), a, maxAttempts)
 	if err != nil {
 		if a.UseConfigToken {
 			writeOpenAIError(w, http.StatusUnauthorized, "Account token is invalid. Please re-login the account in admin.")
@@ -100,13 +107,13 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	pow, err := h.DS.GetPow(r.Context(), a, 3)
+	pow, err := h.DS.GetPow(r.Context(), a, maxAttempts)
 	if err != nil {
 		writeOpenAIError(w, http.StatusUnauthorized, "Failed to get PoW (invalid token or unknown error).")
 		return
 	}
 	payload := stdReq.CompletionPayload(sessionID)
-	resp, err := h.DS.CallCompletion(r.Context(), a, payload, pow, 3)
+	resp, err := h.DS.CallCompletion(r.Context(), a, payload, pow, maxAttempts)
 	if err != nil {
 		writeOpenAIError(w, http.StatusInternalServerError, "Failed to get completion.")
 		return

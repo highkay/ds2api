@@ -228,8 +228,16 @@ OpenAI 文件相关实现：
 - inline/base64/data URL 上传：
   [internal/httpapi/openai/files/file_inline_upload.go](../internal/httpapi/openai/files/file_inline_upload.go)
 - 当 `runtime.disable_upstream_file_uploads=true` 时，显式 `/v1/files`、inline/base64 上传和 history split 的上游文件上传都会关闭；已有 `file_id` / `ref_file_ids` 仍按普通引用收集。
+- `runtime.max_inline_files_per_request` 会限制单次请求中 inline/base64/data URL 文件块数量，超过时在本地返回 `413`，不会上传到 DeepSeek。
 - 文件 ID 收集：
   [internal/promptcompat/file_refs.go](../internal/promptcompat/file_refs.go)
+
+OpenAI Chat / Responses 在完成 prompt 组装和 history split 后、触达 DeepSeek 前，会执行风险预检：
+
+- `runtime.max_prompt_chars` 限制最终 prompt 字符数，超过时返回 `413 prompt_too_large`。
+- `runtime.max_ref_files_per_request` 限制最终 `ref_file_ids` 数量，超过时返回 `413 too_many_ref_files`。
+
+这层预检的 owner 是 [internal/riskguard](../internal/riskguard)，目的是在本地拦住超长上下文和过多文件引用，避免把明显高风险 payload 交给 Web Chat。
 
 结论：
 
@@ -276,6 +284,8 @@ history split 现在全局强制开启；旧配置中的 `history_split.enabled=
 
 - `prompt` 里的 live context
 - `ref_file_ids` 指向的 history transcript file
+
+history split 的上传同样受 `runtime.disable_upstream_file_uploads`、`runtime.upstream_max_attempts` 和风险预检影响。默认 `runtime.upstream_max_attempts=1`，并且禁言、上游 `429`、上游 `403`、网络和 5xx 后不会自动换号重试，除非显式打开对应 `runtime.retry_after_*` 开关。
 
 ## 10. 各协议入口的差异
 

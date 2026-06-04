@@ -103,21 +103,7 @@ func (h *Handler) configImport(w http.ResponseWriter, r *http.Request) {
 			if incoming.Admin.JWTValidAfterUnix > 0 {
 				next.Admin.JWTValidAfterUnix = incoming.Admin.JWTValidAfterUnix
 			}
-			if incoming.Runtime.AccountMaxInflight > 0 {
-				next.Runtime.AccountMaxInflight = incoming.Runtime.AccountMaxInflight
-			}
-			if configPayloadFieldPresent(payload, "runtime", "account_max_queue") {
-				next.Runtime.AccountMaxQueue = incoming.Runtime.AccountMaxQueue
-			}
-			if incoming.Runtime.GlobalMaxInflight > 0 {
-				next.Runtime.GlobalMaxInflight = incoming.Runtime.GlobalMaxInflight
-			}
-			if incoming.Runtime.TokenRefreshIntervalHours > 0 {
-				next.Runtime.TokenRefreshIntervalHours = incoming.Runtime.TokenRefreshIntervalHours
-			}
-			if incoming.Runtime.AccountMuteScanIntervalSeconds > 0 {
-				next.Runtime.AccountMuteScanIntervalSeconds = incoming.Runtime.AccountMuteScanIntervalSeconds
-			}
+			mergeRuntimePayload(&next.Runtime, incoming.Runtime, payload)
 		}
 
 		normalizeSettingsConfig(&next)
@@ -154,4 +140,108 @@ func configPayloadFieldPresent(payload map[string]any, section, name string) boo
 	}
 	_, exists := raw[name]
 	return exists
+}
+
+func mergeRuntimePayload(next *config.RuntimeConfig, incoming config.RuntimeConfig, payload map[string]any) {
+	if next == nil {
+		return
+	}
+	if incoming.AccountMaxInflight > 0 {
+		next.AccountMaxInflight = incoming.AccountMaxInflight
+	}
+	if runtimePayloadFieldPresent(payload, "account_max_queue") {
+		next.AccountMaxQueue = incoming.AccountMaxQueue
+	}
+	if incoming.GlobalMaxInflight > 0 {
+		next.GlobalMaxInflight = incoming.GlobalMaxInflight
+	}
+	if incoming.TokenRefreshIntervalHours > 0 {
+		next.TokenRefreshIntervalHours = incoming.TokenRefreshIntervalHours
+	}
+	if incoming.AccountMuteScanIntervalSeconds > 0 {
+		next.AccountMuteScanIntervalSeconds = incoming.AccountMuteScanIntervalSeconds
+	}
+	if incoming.UpstreamMaxAttempts > 0 {
+		next.UpstreamMaxAttempts = incoming.UpstreamMaxAttempts
+	}
+	copyRuntimeBoolPtrIfPresent(&next.RetryAfterMuted, incoming.RetryAfterMuted, payload, "retry_after_muted")
+	copyRuntimeBoolPtrIfPresent(&next.RetryAfterHTTP429, incoming.RetryAfterHTTP429, payload, "retry_after_http_429")
+	copyRuntimeBoolPtrIfPresent(&next.RetryAfterHTTP403, incoming.RetryAfterHTTP403, payload, "retry_after_http_403")
+	copyRuntimeBoolPtrIfPresent(&next.RetryAfterNetwork, incoming.RetryAfterNetwork, payload, "retry_after_network")
+	copyRuntimeBoolPtrIfPresent(&next.RetryAfterHTTP5xx, incoming.RetryAfterHTTP5xx, payload, "retry_after_http_5xx")
+	copyRuntimeBoolPtrIfPresent(&next.AllowCooldownAccountFallback, incoming.AllowCooldownAccountFallback, payload, "allow_cooldown_account_fallback")
+	copyRuntimeBoolPtrIfPresent(&next.RiskBreakerEnabled, incoming.RiskBreakerEnabled, payload, "risk_breaker_enabled")
+	if incoming.RiskBreakerWindowSeconds > 0 {
+		next.RiskBreakerWindowSeconds = incoming.RiskBreakerWindowSeconds
+	}
+	if incoming.RiskBreakerMuteCooldownSeconds > 0 {
+		next.RiskBreakerMuteCooldownSeconds = incoming.RiskBreakerMuteCooldownSeconds
+	}
+	if incoming.RiskBreakerHardMuteCount > 0 {
+		next.RiskBreakerHardMuteCount = incoming.RiskBreakerHardMuteCount
+	}
+	if incoming.RiskBreakerHardCooldownSeconds > 0 {
+		next.RiskBreakerHardCooldownSeconds = incoming.RiskBreakerHardCooldownSeconds
+	}
+	if incoming.RiskBreakerHTTP429Threshold > 0 {
+		next.RiskBreakerHTTP429Threshold = incoming.RiskBreakerHTTP429Threshold
+	}
+	if incoming.RiskBreakerHTTP403Threshold > 0 {
+		next.RiskBreakerHTTP403Threshold = incoming.RiskBreakerHTTP403Threshold
+	}
+	if incoming.RiskBreakerSoftCooldownSeconds > 0 {
+		next.RiskBreakerSoftCooldownSeconds = incoming.RiskBreakerSoftCooldownSeconds
+	}
+	if incoming.CallerMaxInflight > 0 {
+		next.CallerMaxInflight = incoming.CallerMaxInflight
+	}
+	if incoming.MaxPromptChars > 0 {
+		next.MaxPromptChars = incoming.MaxPromptChars
+	}
+	if incoming.MaxRefFilesPerRequest > 0 {
+		next.MaxRefFilesPerRequest = incoming.MaxRefFilesPerRequest
+	}
+	if incoming.MaxInlineFilesPerRequest > 0 {
+		next.MaxInlineFilesPerRequest = incoming.MaxInlineFilesPerRequest
+	}
+	copyRuntimeBoolPtrIfPresent(&next.AllowAutoDeleteAll, incoming.AllowAutoDeleteAll, payload, "allow_auto_delete_all")
+	copyRuntimeBoolPtrIfPresent(&next.DisableUpstreamFileUploads, incoming.DisableUpstreamFileUploads, payload, "disable_upstream_file_uploads")
+	copyRuntimeBoolPtrIfPresent(&next.AccountHealthEnabled, incoming.AccountHealthEnabled, payload, "account_health_enabled")
+	if incoming.AccountHealthRecoveryWindowSeconds > 0 {
+		next.AccountHealthRecoveryWindowSeconds = incoming.AccountHealthRecoveryWindowSeconds
+	}
+	if incoming.AccountHealthMaxCooldownSeconds > 0 {
+		next.AccountHealthMaxCooldownSeconds = incoming.AccountHealthMaxCooldownSeconds
+	}
+	if incoming.AccountHealthCooldown429Seconds > 0 {
+		next.AccountHealthCooldown429Seconds = incoming.AccountHealthCooldown429Seconds
+	}
+	if incoming.AccountHealthCooldown403Seconds > 0 {
+		next.AccountHealthCooldown403Seconds = incoming.AccountHealthCooldown403Seconds
+	}
+	if incoming.AccountHealthCooldownAuthSeconds > 0 {
+		next.AccountHealthCooldownAuthSeconds = incoming.AccountHealthCooldownAuthSeconds
+	}
+	if incoming.AccountHealthCooldown5xxSeconds > 0 {
+		next.AccountHealthCooldown5xxSeconds = incoming.AccountHealthCooldown5xxSeconds
+	}
+	if incoming.AccountHealthCooldownNetworkSeconds > 0 {
+		next.AccountHealthCooldownNetworkSeconds = incoming.AccountHealthCooldownNetworkSeconds
+	}
+	if runtimePayloadFieldPresent(payload, "account_health_cooldown_empty_seconds") {
+		next.AccountHealthCooldownEmptySeconds = incoming.AccountHealthCooldownEmptySeconds
+	}
+	if incoming.AccountHealthCooldownMutedSeconds > 0 {
+		next.AccountHealthCooldownMutedSeconds = incoming.AccountHealthCooldownMutedSeconds
+	}
+}
+
+func runtimePayloadFieldPresent(payload map[string]any, name string) bool {
+	return configPayloadFieldPresent(payload, "runtime", name)
+}
+
+func copyRuntimeBoolPtrIfPresent(dest **bool, incoming *bool, payload map[string]any, name string) {
+	if runtimePayloadFieldPresent(payload, name) {
+		*dest = incoming
+	}
 }

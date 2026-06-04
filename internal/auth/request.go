@@ -33,6 +33,7 @@ type RequestAuth struct {
 	TriedAccounts  map[string]bool
 	resolver       *Resolver
 	Penalized      bool
+	callerSlotHeld bool
 }
 
 type LoginFunc func(ctx context.Context, acc config.Account) (string, error)
@@ -44,6 +45,7 @@ type Resolver struct {
 
 	mu               sync.Mutex
 	tokenRefreshedAt map[string]time.Time
+	callerInUse      map[string]int
 }
 
 func NewResolver(store *config.Store, pool *account.Pool, login LoginFunc) *Resolver {
@@ -52,6 +54,7 @@ func NewResolver(store *config.Store, pool *account.Pool, login LoginFunc) *Reso
 		Pool:             pool,
 		Login:            login,
 		tokenRefreshedAt: map[string]time.Time{},
+		callerInUse:      map[string]int{},
 	}
 }
 
@@ -80,6 +83,23 @@ func (r *Resolver) Determine(req *http.Request) (*RequestAuth, error) {
 }
 
 func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, target string) (*RequestAuth, error) {
+	if !r.acquireCallerSlot(callerID) {
+		return nil, ErrNoAccount
+	}
+	slotRetained := false
+	releaseSlot := func() {
+		if slotRetained {
+			return
+		}
+		slotRetained = true
+		r.releaseCallerSlot(callerID)
+	}
+	defer func() {
+		if !slotRetained {
+			releaseSlot()
+		}
+	}()
+
 	tried := map[string]bool{}
 	var lastEnsureErr error
 	for {
@@ -105,6 +125,7 @@ func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, targ
 			Account:        acc,
 			TriedAccounts:  tried,
 			resolver:       r,
+			callerSlotHeld: true,
 		}
 
 		if err := r.ensureManagedToken(ctx, a); err != nil {
@@ -117,8 +138,61 @@ func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, targ
 			}
 			continue
 		}
+		slotRetained = true
 		return a, nil
 	}
+}
+
+func normalizeCallerID(callerID string) string {
+	callerID = strings.TrimSpace(callerID)
+	if callerID == "" {
+		return "caller:unknown"
+	}
+	return callerID
+}
+
+func (r *Resolver) callerMaxInflight() int {
+	if r == nil || r.Store == nil {
+		return 0
+	}
+	return r.Store.RuntimeCallerMaxInflight()
+}
+
+func (r *Resolver) acquireCallerSlot(callerID string) bool {
+	maxInflight := r.callerMaxInflight()
+	if maxInflight <= 0 {
+		return true
+	}
+	callerID = normalizeCallerID(callerID)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.callerInUse == nil {
+		r.callerInUse = map[string]int{}
+	}
+	if r.callerInUse[callerID] >= maxInflight {
+		return false
+	}
+	r.callerInUse[callerID]++
+	return true
+}
+
+func (r *Resolver) releaseCallerSlot(callerID string) {
+	if r == nil {
+		return
+	}
+	maxInflight := r.callerMaxInflight()
+	if maxInflight <= 0 {
+		return
+	}
+	callerID = normalizeCallerID(callerID)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := r.callerInUse[callerID]
+	if count <= 1 {
+		delete(r.callerInUse, callerID)
+		return
+	}
+	r.callerInUse[callerID] = count - 1
 }
 
 // DetermineCaller resolves caller identity without acquiring any pooled account.
@@ -273,13 +347,50 @@ func (a *RequestAuth) Penalize(kind account.PenaltyKind) {
 }
 
 func (r *Resolver) Release(a *RequestAuth) {
-	if a == nil || !a.UseConfigToken || a.AccountID == "" {
+	if a == nil {
+		return
+	}
+	if a.callerSlotHeld {
+		r.releaseCallerSlot(a.CallerID)
+		a.callerSlotHeld = false
+	}
+	if !a.UseConfigToken || a.AccountID == "" {
 		return
 	}
 	if !a.Penalized {
 		r.Pool.RecordSuccess(a.AccountID)
 	}
 	r.Pool.Release(a.AccountID)
+}
+
+func (a *RequestAuth) ShouldRetryAfterPenalty(kind account.PenaltyKind) bool {
+	if a == nil || a.resolver == nil || a.resolver.Store == nil {
+		return false
+	}
+	if !a.UseConfigToken {
+		return false
+	}
+	switch kind {
+	case account.PenaltyMuted:
+		return a.resolver.Store.RuntimeRetryAfterMuted()
+	case account.PenaltyHTTP429:
+		return a.resolver.Store.RuntimeRetryAfterHTTP429()
+	case account.PenaltyHTTP403:
+		return a.resolver.Store.RuntimeRetryAfterHTTP403()
+	case account.PenaltyHTTP5xx:
+		return a.resolver.Store.RuntimeRetryAfterHTTP5xx()
+	case account.PenaltyNetwork:
+		return a.resolver.Store.RuntimeRetryAfterNetwork()
+	default:
+		return false
+	}
+}
+
+func (a *RequestAuth) RecordRiskEvent(kind account.RiskEventKind, model string) {
+	if a == nil || a.resolver == nil || a.resolver.Pool == nil || !a.UseConfigToken {
+		return
+	}
+	a.resolver.Pool.RecordRiskEvent(kind, a.AccountID, a.CallerID, model)
 }
 
 func (r *Resolver) penalize(a *RequestAuth, kind account.PenaltyKind) {

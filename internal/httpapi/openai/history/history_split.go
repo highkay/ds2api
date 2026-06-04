@@ -47,7 +47,7 @@ func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptco
 		ContentType: historySplitContentType,
 		Purpose:     historySplitPurpose,
 		Data:        []byte(historyText),
-	}, 3)
+	}, config.RuntimeUpstreamMaxAttemptsFrom(s.Store))
 	if err != nil {
 		return stdReq, fmt.Errorf("upload history file: %w", err)
 	}

@@ -99,6 +99,42 @@ func ValidateRuntimeConfig(runtime RuntimeConfig) error {
 	if err := ValidateIntRange("runtime.account_mute_scan_interval_seconds", runtime.AccountMuteScanIntervalSeconds, 30, 604800, false); err != nil {
 		return err
 	}
+	if err := ValidateIntRange("runtime.upstream_max_attempts", runtime.UpstreamMaxAttempts, 1, 5, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.risk_breaker_window_seconds", runtime.RiskBreakerWindowSeconds, 30, 86400, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.risk_breaker_mute_cooldown_seconds", runtime.RiskBreakerMuteCooldownSeconds, 1, 86400, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.risk_breaker_hard_mute_count", runtime.RiskBreakerHardMuteCount, 1, 100, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.risk_breaker_hard_cooldown_seconds", runtime.RiskBreakerHardCooldownSeconds, 1, 86400, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.risk_breaker_http_429_threshold", runtime.RiskBreakerHTTP429Threshold, 1, 10000, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.risk_breaker_http_403_threshold", runtime.RiskBreakerHTTP403Threshold, 1, 10000, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.risk_breaker_soft_cooldown_seconds", runtime.RiskBreakerSoftCooldownSeconds, 1, 86400, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.caller_max_inflight", runtime.CallerMaxInflight, 1, 1000, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.max_prompt_chars", runtime.MaxPromptChars, 1000, 2000000, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.max_ref_files_per_request", runtime.MaxRefFilesPerRequest, 1, 200, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("runtime.max_inline_files_per_request", runtime.MaxInlineFilesPerRequest, 1, 200, false); err != nil {
+		return err
+	}
 	if err := ValidateIntRange("runtime.account_health_recovery_window_seconds", runtime.AccountHealthRecoveryWindowSeconds, 1, 86400, false); err != nil {
 		return err
 	}

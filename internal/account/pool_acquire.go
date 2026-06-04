@@ -53,9 +53,15 @@ func (p *Pool) acquireLocked(target string, exclude map[string]bool) (config.Acc
 		if exclude[target] || !p.canAcquireIDLocked(target) {
 			return config.Account{}, false
 		}
-		acc, ok := p.store.FindAvailableAccount(target, p.now())
+		now := p.now()
+		acc, ok := p.store.FindAvailableAccount(target, now)
 		if !ok {
 			return config.Account{}, false
+		}
+		if p.healthCfg.enabled && !p.allowCooldownFallback {
+			if h := p.health[target]; h != nil && h.cooldownRemaining(now) > 0 {
+				return config.Account{}, false
+			}
 		}
 		p.inUse[target]++
 		p.bumpQueue(target)
@@ -79,16 +85,16 @@ func (p *Pool) tryAcquire(exclude map[string]bool) (config.Account, bool) {
 		if _, ok := p.store.FindAvailableAccount(id, now); !ok {
 			continue
 		}
-		fallback = append(fallback, id)
 		if p.healthCfg.enabled {
 			if h := p.health[id]; h != nil && h.cooldownRemaining(now) > 0 {
+				fallback = append(fallback, id)
 				continue
 			}
 		}
 		primary = append(primary, id)
 	}
 	candidates := primary
-	if len(candidates) == 0 {
+	if len(candidates) == 0 && p.allowCooldownFallback {
 		candidates = fallback
 	}
 	if len(candidates) == 0 {

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"ds2api/internal/account"
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 )
@@ -81,7 +82,7 @@ func (c *Client) handleMutedResponse(ctx context.Context, a *auth.RequestAuth, o
 	if a != nil && a.UseConfigToken {
 		a.MarkAccountMuted(info.Until)
 		config.Logger.Warn("[account_mute] upstream muted account", "op", op, "account", a.AccountID, "mute_until", info.Until)
-		if a.SwitchAccount(ctx) {
+		if a.ShouldRetryAfterPenalty(account.PenaltyMuted) && a.SwitchAccount(ctx) {
 			return true, nil
 		}
 	}

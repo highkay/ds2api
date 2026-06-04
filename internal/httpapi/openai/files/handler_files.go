@@ -75,7 +75,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		ContentType: contentType,
 		Purpose:     strings.TrimSpace(r.FormValue("purpose")),
 		Data:        data,
-	}, 3)
+	}, config.RuntimeUpstreamMaxAttemptsFrom(h.Store))
 	if err != nil {
 		shared.WriteOpenAIError(w, http.StatusInternalServerError, "Failed to upload file.")
 		return

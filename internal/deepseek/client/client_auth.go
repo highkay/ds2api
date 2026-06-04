@@ -63,14 +63,13 @@ func (c *Client) CreateSession(ctx context.Context, a *auth.RequestAuth, maxAtte
 		resp, status, err := c.postJSONWithStatus(ctx, clients.regular, clients.fallback, dsprotocol.DeepSeekCreateSessionURL, headers, map[string]any{"agent": "chat"})
 		if err != nil {
 			config.Logger.Warn("[create_session] request error", "error", err, "account", a.AccountID)
-			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+			if switchAccountAfterPenalty(ctx, a, account.PenaltyNetwork) {
 				refreshed = false
 				attempts++
 				clients = c.requestClientsForAuth(ctx, a)
 				continue
 			}
-			attempts++
-			continue
+			return "", err
 		}
 		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
 		if muted, muteErr := c.handleMutedResponse(ctx, a, "create session", resp); muted {
@@ -96,11 +95,15 @@ func (c *Client) CreateSession(ctx context.Context, a *auth.RequestAuth, maxAtte
 					continue
 				}
 			}
-			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)) {
+			penalty := penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)
+			if switchAccountAfterPenalty(ctx, a, penalty) {
 				refreshed = false
 				attempts++
 				clients = c.requestClientsForAuth(ctx, a)
 				continue
+			}
+			if penalty != account.PenaltyUnknown {
+				return "", fmt.Errorf("create session failed: status=%d code=%d biz_code=%d msg=%s biz_msg=%s", status, code, bizCode, msg, bizMsg)
 			}
 		}
 		attempts++
@@ -132,14 +135,13 @@ func (c *Client) GetPowForTarget(ctx context.Context, a *auth.RequestAuth, targe
 			config.Logger.Warn("[get_pow] request error", "error", err, "account", a.AccountID, "target_path", targetPath)
 			lastFailureKind = FailureUnknown
 			lastFailureMessage = err.Error()
-			if a.UseConfigToken && c.Auth.SwitchAccountWithPenalty(ctx, a, account.PenaltyNetwork) {
+			if switchAccountAfterPenalty(ctx, a, account.PenaltyNetwork) {
 				refreshed = false
 				attempts++
 				clients = c.requestClientsForAuth(ctx, a)
 				continue
 			}
-			attempts++
-			continue
+			return "", err
 		}
 		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
 		if muted, muteErr := c.handleMutedResponse(ctx, a, "get pow", resp); muted {
@@ -176,11 +178,15 @@ func (c *Client) GetPowForTarget(ctx context.Context, a *auth.RequestAuth, targe
 					continue
 				}
 			}
-			if c.Auth.SwitchAccountWithPenalty(ctx, a, penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)) {
+			penalty := penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)
+			if switchAccountAfterPenalty(ctx, a, penalty) {
 				refreshed = false
 				attempts++
 				clients = c.requestClientsForAuth(ctx, a)
 				continue
+			}
+			if penalty != account.PenaltyUnknown {
+				return "", &RequestFailure{Op: "get pow", Kind: lastFailureKind, Message: lastFailureMessage}
 			}
 		}
 		attempts++
