@@ -81,6 +81,12 @@ func mergeRuntimeConfig(current config.RuntimeConfig, incoming *config.RuntimeCo
 		if incoming.MaxInlineFilesPerRequest > 0 {
 			merged.MaxInlineFilesPerRequest = incoming.MaxInlineFilesPerRequest
 		}
+		if incoming.PromptRiskGuardEnabled != nil {
+			merged.PromptRiskGuardEnabled = incoming.PromptRiskGuardEnabled
+		}
+		if incoming.PromptBlockRules != nil {
+			merged.PromptBlockRules = incoming.PromptBlockRules
+		}
 		if incoming.AllowAutoDeleteAll != nil {
 			merged.AllowAutoDeleteAll = incoming.AllowAutoDeleteAll
 		}

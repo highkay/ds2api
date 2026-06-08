@@ -398,6 +398,7 @@
         "retryAfterHTTP5xx": "HTTP 5xx 后继续换号重试",
         "allowCooldownAccountFallback": "允许使用冷却账号",
         "riskBreakerEnabled": "启用池级风险熔断",
+        "promptRiskGuardEnabled": "启用 Prompt 特征拦截",
         "disableUpstreamFileUploads": "禁用上游文件上传",
         "allowAutoDeleteAll": "允许删除全部远端会话",
         "accountHealthEnabled": "启用账号健康冷却",

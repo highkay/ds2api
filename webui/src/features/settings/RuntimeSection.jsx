@@ -15,6 +15,7 @@ const TOGGLE_FIELDS = [
     ['retryAfterHTTP5xx', 'retry_after_http_5xx'],
     ['allowCooldownAccountFallback', 'allow_cooldown_account_fallback'],
     ['riskBreakerEnabled', 'risk_breaker_enabled'],
+    ['promptRiskGuardEnabled', 'prompt_risk_guard_enabled'],
     ['disableUpstreamFileUploads', 'disable_upstream_file_uploads'],
     ['allowAutoDeleteAll', 'allow_auto_delete_all'],
     ['accountHealthEnabled', 'account_health_enabled'],

@@ -319,6 +319,7 @@ DS2API 默认按 DeepSeek Web 账号安全优先处理上游异常：
 - `runtime.allow_cooldown_account_fallback=false` 时，不会在健康冷却中的账号里兜底挑号。
 - `runtime.caller_max_inflight` 默认限制同一客户端凭据最多 2 个托管账号请求并发，避免单个调用方打满账号池。
 - `runtime.max_prompt_chars`、`max_ref_files_per_request`、`max_inline_files_per_request` 会在触达 DeepSeek 前做本地 `413` 拦截，降低超长上下文、大量附件或 inline 文件触发 Web 风控的概率。
+- `runtime.prompt_risk_guard_enabled=true` 时，`runtime.prompt_block_rules` 可按“必须全部包含”的 prompt 文本片段在本地返回 `422 prompt_blocked`，用于拦截已知会触发 Web 风控的业务指纹。
 - `auto_delete.mode=all` 默认被 `runtime.allow_auto_delete_all=false` 拦住并降级为 `single`，避免单次请求清理全部远端会话。
 
 ## Tool Call 适配

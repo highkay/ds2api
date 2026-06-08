@@ -82,6 +82,8 @@ func runtimeConfigPresent(runtime RuntimeConfig) bool {
 		runtime.MaxPromptChars > 0 ||
 		runtime.MaxRefFilesPerRequest > 0 ||
 		runtime.MaxInlineFilesPerRequest > 0 ||
+		runtime.PromptRiskGuardEnabled != nil ||
+		len(runtime.PromptBlockRules) > 0 ||
 		runtime.AllowAutoDeleteAll != nil ||
 		runtime.DisableUpstreamFileUploads != nil ||
 		runtime.AccountHealthEnabled != nil ||
@@ -215,9 +217,23 @@ func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
 	out.RetryAfterHTTP5xx = cloneBoolPtr(in.RetryAfterHTTP5xx)
 	out.AllowCooldownAccountFallback = cloneBoolPtr(in.AllowCooldownAccountFallback)
 	out.RiskBreakerEnabled = cloneBoolPtr(in.RiskBreakerEnabled)
+	out.PromptRiskGuardEnabled = cloneBoolPtr(in.PromptRiskGuardEnabled)
+	out.PromptBlockRules = clonePromptBlockRules(in.PromptBlockRules)
 	out.AllowAutoDeleteAll = cloneBoolPtr(in.AllowAutoDeleteAll)
 	out.DisableUpstreamFileUploads = cloneBoolPtr(in.DisableUpstreamFileUploads)
 	out.AccountHealthEnabled = cloneBoolPtr(in.AccountHealthEnabled)
+	return out
+}
+
+func clonePromptBlockRules(in []PromptBlockRule) []PromptBlockRule {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]PromptBlockRule, len(in))
+	for i, rule := range in {
+		out[i] = rule
+		out[i].ContainsAll = slices.Clone(rule.ContainsAll)
+	}
 	return out
 }
 

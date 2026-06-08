@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -138,6 +139,14 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 		if err := setRuntimeIntFrom(raw, "max_inline_files_per_request", 1, 200, &cfg.MaxInlineFilesPerRequest); err != nil {
 			return nil, nil, nil, nil, nil, nil, nil, nil, err
 		}
+		setBoolPtrFrom(raw, "prompt_risk_guard_enabled", &cfg.PromptRiskGuardEnabled)
+		if v, exists := raw["prompt_block_rules"]; exists {
+			rules, err := promptBlockRulesFrom(v)
+			if err != nil {
+				return nil, nil, nil, nil, nil, nil, nil, nil, err
+			}
+			cfg.PromptBlockRules = rules
+		}
 		setBoolPtrFrom(raw, "allow_auto_delete_all", &cfg.AllowAutoDeleteAll)
 		setBoolPtrFrom(raw, "disable_upstream_file_uploads", &cfg.DisableUpstreamFileUploads)
 		setBoolPtrFrom(raw, "account_health_enabled", &cfg.AccountHealthEnabled)
@@ -261,4 +270,22 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 	}
 
 	return adminCfg, runtimeCfg, compatCfg, respCfg, embCfg, autoDeleteCfg, historySplitCfg, aliasMap, nil
+}
+
+func promptBlockRulesFrom(v any) ([]config.PromptBlockRule, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("runtime.prompt_block_rules must be an array of objects")
+	}
+	var rules []config.PromptBlockRule
+	if err := json.Unmarshal(b, &rules); err != nil {
+		return nil, fmt.Errorf("runtime.prompt_block_rules must be an array of objects")
+	}
+	if rules == nil {
+		rules = []config.PromptBlockRule{}
+	}
+	if err := config.ValidateRuntimeConfig(config.RuntimeConfig{PromptBlockRules: rules}); err != nil {
+		return nil, err
+	}
+	return rules, nil
 }

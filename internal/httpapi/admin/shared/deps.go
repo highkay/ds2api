@@ -53,6 +53,8 @@ type ConfigStore interface {
 	RuntimeMaxPromptChars() int
 	RuntimeMaxRefFilesPerRequest() int
 	RuntimeMaxInlineFilesPerRequest() int
+	RuntimePromptRiskGuardEnabled() bool
+	RuntimePromptBlockRules() []config.PromptBlockRule
 	RuntimeAllowAutoDeleteAll() bool
 	UpstreamFileUploadsEnabled() bool
 	AccountHealthEnabled() bool

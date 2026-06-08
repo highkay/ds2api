@@ -75,6 +75,10 @@ func writeOpenAIError(w http.ResponseWriter, status int, message string) {
 	shared.WriteOpenAIError(w, status, message)
 }
 
+func writeOpenAIErrorWithCode(w http.ResponseWriter, status int, message, code string) {
+	shared.WriteOpenAIErrorWithCode(w, status, message, code)
+}
+
 func writeOpenAIAccountPoolBusyError(w http.ResponseWriter) {
 	shared.WriteOpenAIAccountPoolBusyError(w)
 }

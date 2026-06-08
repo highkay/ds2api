@@ -708,7 +708,7 @@ Reads runtime settings and status, including:
 
 - `success`
 - `admin` (`has_password_hash`, `jwt_expire_hours`, `jwt_valid_after_unix`, `default_password_warning`)
-- `runtime` (account concurrency/queueing, caller concurrency, upstream attempt count, retry toggles, pool risk breaker, prompt/file preflight limits, `disable_upstream_file_uploads`, `account_health_*`)
+- `runtime` (account concurrency/queueing, caller concurrency, upstream attempt count, retry toggles, pool risk breaker, prompt/file preflight limits, prompt fingerprint block rules, `disable_upstream_file_uploads`, `account_health_*`)
 - `compat` (`wide_input_strict_output`, `strip_reference_markers`)
 - `responses` / `embeddings`
 - `auto_delete` (`mode`: `none` / `single` / `all`; legacy `sessions=true` is still treated as `all`)
@@ -723,7 +723,7 @@ The default risk posture is conservative: `runtime.upstream_max_attempts=1`, and
 
 When `runtime.risk_breaker_enabled=true`, mute, upstream `429`, and upstream `403` events feed a pool-level risk breaker. Defaults: any mute in the 10-minute window cools the pool for 1 hour, 2 mute events cool it for 6 hours, and 5 upstream `429` or 2 upstream `403` events cool it for 15 minutes. During a breaker cooldown the account pool stops issuing accounts, and `/admin/queue/status` exposes `risk.cooling_down`, `reason`, remaining time, and event counters.
 
-`runtime.caller_max_inflight` limits one client credential to 2 managed-account requests by default. `runtime.max_prompt_chars`, `runtime.max_ref_files_per_request`, and `runtime.max_inline_files_per_request` reject risky requests locally with `413` before touching DeepSeek. When `runtime.allow_auto_delete_all=false`, `auto_delete.mode=all` is downgraded to `single` at runtime.
+`runtime.caller_max_inflight` limits one client credential to 2 managed-account requests by default. `runtime.max_prompt_chars`, `runtime.max_ref_files_per_request`, and `runtime.max_inline_files_per_request` reject risky requests locally with `413` before touching DeepSeek. When `runtime.prompt_risk_guard_enabled=true`, `runtime.prompt_block_rules` can reject prompts locally with `422 prompt_blocked` when every configured text fragment is present, for known risky web-chat fingerprints. When `runtime.allow_auto_delete_all=false`, `auto_delete.mode=all` is downgraded to `single` at runtime.
 
 > `runtime.account_mute_scan_interval_seconds` is a config-file field, not a hot-updated `/admin/settings` field. It controls the local long-running background `/api/v0/users/current` mute scan interval, defaults to `43200` seconds, and does not run on Vercel Serverless.
 
@@ -739,6 +739,7 @@ Hot-updates runtime settings. Supported fields:
 - `runtime.risk_breaker_enabled` and `runtime.risk_breaker_*`
 - `runtime.caller_max_inflight`
 - `runtime.max_prompt_chars` / `runtime.max_ref_files_per_request` / `runtime.max_inline_files_per_request`
+- `runtime.prompt_risk_guard_enabled` / `runtime.prompt_block_rules`
 - `runtime.allow_auto_delete_all`
 - `runtime.disable_upstream_file_uploads`
 - `runtime.account_health_enabled` and `runtime.account_health_*_seconds` cooldown/recovery fields

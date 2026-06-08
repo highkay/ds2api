@@ -34,6 +34,8 @@ const DEFAULT_RUNTIME = {
     max_prompt_chars: 60000,
     max_ref_files_per_request: 8,
     max_inline_files_per_request: 4,
+    prompt_risk_guard_enabled: true,
+    prompt_block_rules: [],
     allow_auto_delete_all: false,
     disable_upstream_file_uploads: false,
     account_health_enabled: true,
@@ -95,6 +97,10 @@ function runtimeBool(runtime, key) {
     return Boolean(runtime?.[key] ?? DEFAULT_RUNTIME[key])
 }
 
+function runtimeRules(runtime, key) {
+    return Array.isArray(runtime?.[key]) ? runtime[key] : DEFAULT_RUNTIME[key]
+}
+
 function fromServerForm(data) {
     const runtime = data.runtime || {}
     return {
@@ -123,6 +129,8 @@ function fromServerForm(data) {
             max_prompt_chars: runtimeNumber(runtime, 'max_prompt_chars'),
             max_ref_files_per_request: runtimeNumber(runtime, 'max_ref_files_per_request'),
             max_inline_files_per_request: runtimeNumber(runtime, 'max_inline_files_per_request'),
+            prompt_risk_guard_enabled: runtimeBool(runtime, 'prompt_risk_guard_enabled'),
+            prompt_block_rules: runtimeRules(runtime, 'prompt_block_rules'),
             allow_auto_delete_all: runtimeBool(runtime, 'allow_auto_delete_all'),
             disable_upstream_file_uploads: runtimeBool(runtime, 'disable_upstream_file_uploads'),
             account_health_enabled: runtimeBool(runtime, 'account_health_enabled'),
@@ -184,6 +192,8 @@ function toServerPayload(form) {
             max_prompt_chars: Number(runtime.max_prompt_chars),
             max_ref_files_per_request: Number(runtime.max_ref_files_per_request),
             max_inline_files_per_request: Number(runtime.max_inline_files_per_request),
+            prompt_risk_guard_enabled: Boolean(runtime.prompt_risk_guard_enabled),
+            prompt_block_rules: Array.isArray(runtime.prompt_block_rules) ? runtime.prompt_block_rules : [],
             allow_auto_delete_all: Boolean(runtime.allow_auto_delete_all),
             disable_upstream_file_uploads: Boolean(runtime.disable_upstream_file_uploads),
             account_health_enabled: Boolean(runtime.account_health_enabled),

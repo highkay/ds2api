@@ -47,6 +47,8 @@ func (h *Handler) getSettings(w http.ResponseWriter, _ *http.Request) {
 			"max_prompt_chars":                        h.Store.RuntimeMaxPromptChars(),
 			"max_ref_files_per_request":               h.Store.RuntimeMaxRefFilesPerRequest(),
 			"max_inline_files_per_request":            h.Store.RuntimeMaxInlineFilesPerRequest(),
+			"prompt_risk_guard_enabled":               h.Store.RuntimePromptRiskGuardEnabled(),
+			"prompt_block_rules":                      h.Store.RuntimePromptBlockRules(),
 			"allow_auto_delete_all":                   h.Store.RuntimeAllowAutoDeleteAll(),
 			"disable_upstream_file_uploads":           !h.Store.UpstreamFileUploadsEnabled(),
 			"account_health_enabled":                  health.Enabled,

@@ -85,6 +85,8 @@
     "max_prompt_chars": 60000,
     "max_ref_files_per_request": 8,
     "max_inline_files_per_request": 4,
+    "prompt_risk_guard_enabled": true,
+    "prompt_block_rules": [],
     "allow_auto_delete_all": false,
     "disable_upstream_file_uploads": false,
     "account_health_enabled": true,

@@ -27,16 +27,14 @@ func (h *Handler) writeCompletionRiskRejection(w http.ResponseWriter, r *http.Re
 		return true
 	}
 	status, code, message, _ := riskguard.ErrorDetail(err)
-	if status == http.StatusRequestEntityTooLarge {
-		logOpenAILocalRequestRejection(
-			r,
-			status,
-			code,
-			message,
-			"prompt_chars", utf8.RuneCountInString(stdReq.FinalPrompt),
-			"ref_file_count", len(stdReq.RefFileIDs),
-		)
-	}
-	writeOpenAIError(w, status, message)
+	logOpenAILocalRequestRejection(
+		r,
+		status,
+		code,
+		message,
+		"prompt_chars", utf8.RuneCountInString(stdReq.FinalPrompt),
+		"ref_file_count", len(stdReq.RefFileIDs),
+	)
+	writeOpenAIErrorWithCode(w, status, message, code)
 	return false
 }

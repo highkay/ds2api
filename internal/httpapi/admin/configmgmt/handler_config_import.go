@@ -204,6 +204,10 @@ func mergeRuntimePayload(next *config.RuntimeConfig, incoming config.RuntimeConf
 	if incoming.MaxInlineFilesPerRequest > 0 {
 		next.MaxInlineFilesPerRequest = incoming.MaxInlineFilesPerRequest
 	}
+	copyRuntimeBoolPtrIfPresent(&next.PromptRiskGuardEnabled, incoming.PromptRiskGuardEnabled, payload, "prompt_risk_guard_enabled")
+	if runtimePayloadFieldPresent(payload, "prompt_block_rules") {
+		next.PromptBlockRules = incoming.PromptBlockRules
+	}
 	copyRuntimeBoolPtrIfPresent(&next.AllowAutoDeleteAll, incoming.AllowAutoDeleteAll, payload, "allow_auto_delete_all")
 	copyRuntimeBoolPtrIfPresent(&next.DisableUpstreamFileUploads, incoming.DisableUpstreamFileUploads, payload, "disable_upstream_file_uploads")
 	copyRuntimeBoolPtrIfPresent(&next.AccountHealthEnabled, incoming.AccountHealthEnabled, payload, "account_health_enabled")

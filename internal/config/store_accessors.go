@@ -361,6 +361,18 @@ func (s *Store) RuntimeMaxInlineFilesPerRequest() int {
 	return 4
 }
 
+func (s *Store) RuntimePromptRiskGuardEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return boolPtrDefault(s.cfg.Runtime.PromptRiskGuardEnabled, true)
+}
+
+func (s *Store) RuntimePromptBlockRules() []PromptBlockRule {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return clonePromptBlockRules(s.cfg.Runtime.PromptBlockRules)
+}
+
 func (s *Store) RuntimeAllowAutoDeleteAll() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -437,6 +449,28 @@ func RuntimeMaxInlineFilesPerRequestFrom(reader any) int {
 		}
 	}
 	return 4
+}
+
+type runtimePromptRiskGuardEnabledReader interface {
+	RuntimePromptRiskGuardEnabled() bool
+}
+
+func RuntimePromptRiskGuardEnabledFrom(reader any) bool {
+	if r, ok := reader.(runtimePromptRiskGuardEnabledReader); ok {
+		return r.RuntimePromptRiskGuardEnabled()
+	}
+	return true
+}
+
+type runtimePromptBlockRulesReader interface {
+	RuntimePromptBlockRules() []PromptBlockRule
+}
+
+func RuntimePromptBlockRulesFrom(reader any) []PromptBlockRule {
+	if r, ok := reader.(runtimePromptBlockRulesReader); ok {
+		return clonePromptBlockRules(r.RuntimePromptBlockRules())
+	}
+	return nil
 }
 
 type runtimeAllowAutoDeleteAllReader interface {

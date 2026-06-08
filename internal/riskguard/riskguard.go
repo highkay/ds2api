@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"unicode/utf8"
 
 	"ds2api/internal/config"
@@ -45,7 +46,50 @@ func CheckCompletion(reader any, prompt string, refFileIDs []string) error {
 			Message: fmt.Sprintf("request references %d files, limit is %d", len(refFileIDs), maxRefFiles),
 		}
 	}
+	if err := checkPromptBlockRules(reader, prompt); err != nil {
+		return err
+	}
 	return nil
+}
+
+func checkPromptBlockRules(reader any, prompt string) error {
+	if !config.RuntimePromptRiskGuardEnabledFrom(reader) {
+		return nil
+	}
+	for _, rule := range config.RuntimePromptBlockRulesFrom(reader) {
+		if promptBlockRuleMatches(rule, prompt) {
+			return &Violation{
+				Status:  http.StatusUnprocessableEntity,
+				Code:    "prompt_blocked",
+				Message: promptBlockMessage(rule),
+			}
+		}
+	}
+	return nil
+}
+
+func promptBlockRuleMatches(rule config.PromptBlockRule, prompt string) bool {
+	if len(rule.ContainsAll) == 0 {
+		return false
+	}
+	normalizedPrompt := strings.ToLower(prompt)
+	for _, term := range rule.ContainsAll {
+		term = strings.ToLower(strings.TrimSpace(term))
+		if term == "" || !strings.Contains(normalizedPrompt, term) {
+			return false
+		}
+	}
+	return true
+}
+
+func promptBlockMessage(rule config.PromptBlockRule) string {
+	if msg := strings.TrimSpace(rule.Message); msg != "" {
+		return msg
+	}
+	if name := strings.TrimSpace(rule.Name); name != "" {
+		return "prompt blocked by runtime prompt risk guard: " + name
+	}
+	return "prompt blocked by runtime prompt risk guard"
 }
 
 func ErrorDetail(err error) (status int, code string, message string, ok bool) {

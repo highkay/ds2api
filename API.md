@@ -724,7 +724,7 @@ data: {"type":"message_stop"}
 
 `runtime.risk_breaker_enabled=true` 时，禁言、上游 `429`、上游 `403` 会进入池级风险熔断。默认 10 分钟窗口内任一禁言冷却 1 小时，2 次禁言冷却 6 小时，5 次上游 `429` 或 2 次上游 `403` 冷却 15 分钟。熔断期间账号池不再分配账号，`/admin/queue/status` 的 `risk` 字段会返回 `cooling_down`、`reason`、剩余时间与事件计数。
 
-`runtime.caller_max_inflight` 默认限制同一客户端凭据最多 2 个托管账号请求并发。`runtime.max_prompt_chars`、`runtime.max_ref_files_per_request`、`runtime.max_inline_files_per_request` 会在触达 DeepSeek 前做本地 `413` 拦截。`runtime.allow_auto_delete_all=false` 时，`auto_delete.mode=all` 会在运行时降级为 `single`。
+`runtime.caller_max_inflight` 默认限制同一客户端凭据最多 2 个托管账号请求并发。`runtime.max_prompt_chars`、`runtime.max_ref_files_per_request`、`runtime.max_inline_files_per_request` 会在触达 DeepSeek 前做本地 `413` 拦截。`runtime.prompt_risk_guard_enabled=true` 时，`runtime.prompt_block_rules` 可按“必须全部包含”的 prompt 文本片段在本地返回 `422 prompt_blocked`，用于拦截已知会触发 Web 风控的业务指纹。`runtime.allow_auto_delete_all=false` 时，`auto_delete.mode=all` 会在运行时降级为 `single`。
 
 > `runtime.account_mute_scan_interval_seconds` 是配置文件字段，不属于 `/admin/settings` 热更新范围。它控制本地长进程后台 `/api/v0/users/current` 禁言扫描间隔，默认 `43200` 秒；Vercel Serverless 不运行该后台扫描器。
 
@@ -740,6 +740,7 @@ data: {"type":"message_stop"}
 - `runtime.risk_breaker_enabled` 与 `runtime.risk_breaker_*`
 - `runtime.caller_max_inflight`
 - `runtime.max_prompt_chars` / `runtime.max_ref_files_per_request` / `runtime.max_inline_files_per_request`
+- `runtime.prompt_risk_guard_enabled` / `runtime.prompt_block_rules`
 - `runtime.allow_auto_delete_all`
 - `runtime.disable_upstream_file_uploads`
 - `runtime.account_health_enabled` 与 `runtime.account_health_*_seconds` 冷却/恢复参数

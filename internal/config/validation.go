@@ -135,6 +135,23 @@ func ValidateRuntimeConfig(runtime RuntimeConfig) error {
 	if err := ValidateIntRange("runtime.max_inline_files_per_request", runtime.MaxInlineFilesPerRequest, 1, 200, false); err != nil {
 		return err
 	}
+	for i, rule := range runtime.PromptBlockRules {
+		prefix := fmt.Sprintf("runtime.prompt_block_rules[%d]", i)
+		if err := ValidateTrimmedString(prefix+".name", rule.Name, false); err != nil {
+			return err
+		}
+		if len(rule.ContainsAll) == 0 {
+			return fmt.Errorf("%s.contains_all must contain at least one term", prefix)
+		}
+		for j, term := range rule.ContainsAll {
+			if err := ValidateTrimmedString(fmt.Sprintf("%s.contains_all[%d]", prefix, j), term, true); err != nil {
+				return err
+			}
+		}
+		if err := ValidateTrimmedString(prefix+".message", rule.Message, false); err != nil {
+			return err
+		}
+	}
 	if err := ValidateIntRange("runtime.account_health_recovery_window_seconds", runtime.AccountHealthRecoveryWindowSeconds, 1, 86400, false); err != nil {
 		return err
 	}

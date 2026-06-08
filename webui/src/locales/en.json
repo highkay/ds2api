@@ -398,6 +398,7 @@
         "retryAfterHTTP5xx": "Retry on another account after HTTP 5xx",
         "allowCooldownAccountFallback": "Allow cooldown account fallback",
         "riskBreakerEnabled": "Enable pool risk breaker",
+        "promptRiskGuardEnabled": "Enable prompt fingerprint guard",
         "disableUpstreamFileUploads": "Disable upstream file uploads",
         "allowAutoDeleteAll": "Allow deleting all remote sessions",
         "accountHealthEnabled": "Enable account health cooldowns",
