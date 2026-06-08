@@ -40,3 +40,24 @@ func TestStoreHistorySplitLegacyDisabledConfigNormalizesToEnabled(t *testing.T) 
 		t.Fatalf("history split trigger_after_turns=%d want=2", got)
 	}
 }
+
+func TestRuntimePromptRiskGuardDisabledByDefault(t *testing.T) {
+	store := &Store{cfg: Config{}}
+	if store.RuntimePromptRiskGuardEnabled() {
+		t.Fatal("expected prompt risk guard disabled by default")
+	}
+	if RuntimePromptRiskGuardEnabledFrom(nil) {
+		t.Fatal("expected prompt risk guard fallback disabled by default")
+	}
+}
+
+func TestRuntimePromptRiskGuardCanBeEnabled(t *testing.T) {
+	enabled := true
+	store := &Store{cfg: Config{Runtime: RuntimeConfig{PromptRiskGuardEnabled: &enabled}}}
+	if !store.RuntimePromptRiskGuardEnabled() {
+		t.Fatal("expected prompt risk guard to honor explicit true")
+	}
+	if !RuntimePromptRiskGuardEnabledFrom(store) {
+		t.Fatal("expected prompt risk guard reader helper to honor explicit true")
+	}
+}

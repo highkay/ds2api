@@ -236,9 +236,9 @@ OpenAI Chat / Responses 在完成 prompt 组装和 history split 后、触达 De
 
 - `runtime.max_prompt_chars` 限制最终 prompt 字符数，超过时返回 `413 prompt_too_large`。
 - `runtime.max_ref_files_per_request` 限制最终 `ref_file_ids` 数量，超过时返回 `413 too_many_ref_files`。
-- `runtime.prompt_risk_guard_enabled` + `runtime.prompt_block_rules` 按 `contains_all` 文本片段命中时返回 `422 prompt_blocked`。
+- `runtime.prompt_risk_guard_enabled` 默认为 `false`；显式开启后，`runtime.prompt_block_rules` 会按 `contains_all` 文本片段命中并返回 `422 prompt_blocked`。它只适合临时阻断已被生产证明确认会触发 Web 风控的 prompt 指纹，不作为通用内容检测。
 
-这层预检的 owner 是 [internal/riskguard](../internal/riskguard)，目的是在本地拦住超长上下文、过多文件引用和已知高风险 prompt 指纹，避免把明显高风险 payload 交给 Web Chat。
+这层预检的 owner 是 [internal/riskguard](../internal/riskguard)，目的是在本地拦住超长上下文、过多文件引用，以及人工显式开启后的已确认高风险 prompt 指纹，避免把明显高风险 payload 交给 Web Chat。
 
 结论：
 

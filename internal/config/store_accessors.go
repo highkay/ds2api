@@ -364,7 +364,7 @@ func (s *Store) RuntimeMaxInlineFilesPerRequest() int {
 func (s *Store) RuntimePromptRiskGuardEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return boolPtrDefault(s.cfg.Runtime.PromptRiskGuardEnabled, true)
+	return boolPtrDefault(s.cfg.Runtime.PromptRiskGuardEnabled, false)
 }
 
 func (s *Store) RuntimePromptBlockRules() []PromptBlockRule {
@@ -459,7 +459,7 @@ func RuntimePromptRiskGuardEnabledFrom(reader any) bool {
 	if r, ok := reader.(runtimePromptRiskGuardEnabledReader); ok {
 		return r.RuntimePromptRiskGuardEnabled()
 	}
-	return true
+	return false
 }
 
 type runtimePromptBlockRulesReader interface {

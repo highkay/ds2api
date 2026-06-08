@@ -25,7 +25,7 @@ func (l testRuntimeLimits) RuntimeMaxRefFilesPerRequest() int {
 
 func (l testRuntimeLimits) RuntimePromptRiskGuardEnabled() bool {
 	if l.promptRiskGuardEnabled == nil {
-		return true
+		return false
 	}
 	return *l.promptRiskGuardEnabled
 }
@@ -72,9 +72,11 @@ func TestCheckCompletionAllowsRequestWithinLimits(t *testing.T) {
 }
 
 func TestCheckCompletionRejectsPromptBlockRule(t *testing.T) {
+	enabled := true
 	limits := testRuntimeLimits{
-		maxPromptChars: 1000,
-		maxRefFiles:    8,
+		maxPromptChars:         1000,
+		maxRefFiles:            8,
+		promptRiskGuardEnabled: &enabled,
 		promptBlockRules: []config.PromptBlockRule{{
 			Name:        "stock_extraction_tools",
 			ContainsAll: []string{"股票标的提取助手", "rag_search", "rq_web_search"},
@@ -99,9 +101,11 @@ func TestCheckCompletionRejectsPromptBlockRule(t *testing.T) {
 }
 
 func TestCheckCompletionAllowsToolPromptWithoutFullRule(t *testing.T) {
+	enabled := true
 	limits := testRuntimeLimits{
-		maxPromptChars: 1000,
-		maxRefFiles:    8,
+		maxPromptChars:         1000,
+		maxRefFiles:            8,
+		promptRiskGuardEnabled: &enabled,
 		promptBlockRules: []config.PromptBlockRule{{
 			ContainsAll: []string{"股票标的提取助手", "rag_search", "rq_web_search"},
 		}},
@@ -109,6 +113,20 @@ func TestCheckCompletionAllowsToolPromptWithoutFullRule(t *testing.T) {
 	prompt := "TOOL CALL FORMAT - FOLLOW EXACTLY. Available tools: rag_search and rq_web_search."
 	if err := CheckCompletion(limits, prompt, nil); err != nil {
 		t.Fatalf("expected tool prompt without full rule to pass, got %v", err)
+	}
+}
+
+func TestCheckCompletionAllowsPromptBlockRuleByDefault(t *testing.T) {
+	limits := testRuntimeLimits{
+		maxPromptChars: 1000,
+		maxRefFiles:    8,
+		promptBlockRules: []config.PromptBlockRule{{
+			ContainsAll: []string{"股票标的提取助手", "rag_search", "rq_web_search"},
+		}},
+	}
+	prompt := "你是一个专业的股票标的提取助手。请调用 rag_search 和 rq_web_search。"
+	if err := CheckCompletion(limits, prompt, nil); err != nil {
+		t.Fatalf("expected default disabled prompt guard to pass, got %v", err)
 	}
 }
 
