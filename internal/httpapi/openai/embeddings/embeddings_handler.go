@@ -23,8 +23,7 @@ type Handler struct {
 }
 
 func (h *Handler) Embeddings(w http.ResponseWriter, r *http.Request) {
-	a, err := h.Auth.Determine(r)
-	if err != nil {
+	if _, err := h.Auth.DetermineCaller(r); err != nil {
 		if err == auth.ErrNoAccount {
 			shared.WriteOpenAIAccountPoolBusyError(w)
 			return
@@ -32,12 +31,12 @@ func (h *Handler) Embeddings(w http.ResponseWriter, r *http.Request) {
 		shared.WriteOpenAIError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	defer h.Auth.Release(a)
 
 	r.Body = http.MaxBytesReader(w, r.Body, shared.GeneralMaxSize)
 	var req map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "too large") {
+			shared.LogLocalRequestRejection(r, http.StatusRequestEntityTooLarge, "request_body_too_large", "request body too large")
 			shared.WriteOpenAIError(w, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}

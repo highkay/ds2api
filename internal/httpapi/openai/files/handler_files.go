@@ -23,8 +23,7 @@ type Handler struct {
 }
 
 func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
-	a, err := h.Auth.Determine(r)
-	if err != nil {
+	if _, err := h.Auth.DetermineCaller(r); err != nil {
 		if err == auth.ErrNoAccount {
 			shared.WriteOpenAIAccountPoolBusyError(w)
 			return
@@ -32,7 +31,6 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		shared.WriteOpenAIError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	defer h.Auth.Release(a)
 	if !config.UpstreamFileUploadsEnabledFrom(h.Store) {
 		shared.WriteOpenAIError(w, http.StatusBadRequest, "Upstream file uploads are disabled by runtime configuration.")
 		return
@@ -45,6 +43,7 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, shared.UploadMaxSize)
 	if err := r.ParseMultipartForm(openAIUploadMaxMemory); err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "too large") {
+			shared.LogLocalRequestRejection(r, http.StatusRequestEntityTooLarge, "file_body_too_large", "file size exceeds limit")
 			shared.WriteOpenAIError(w, http.StatusRequestEntityTooLarge, "file size exceeds limit")
 			return
 		}
@@ -54,7 +53,6 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if r.MultipartForm != nil {
 		defer func() { _ = r.MultipartForm.RemoveAll() }()
 	}
-	r = r.WithContext(auth.WithAuth(r.Context(), a))
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		shared.WriteOpenAIError(w, http.StatusBadRequest, "file is required")
@@ -70,6 +68,19 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if contentType == "" && len(data) > 0 {
 		contentType = http.DetectContentType(data)
 	}
+
+	a, err := h.Auth.Determine(r)
+	if err != nil {
+		if err == auth.ErrNoAccount {
+			shared.WriteOpenAIAccountPoolBusyError(w)
+			return
+		}
+		shared.WriteOpenAIError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	defer h.Auth.Release(a)
+	r = r.WithContext(auth.WithAuth(r.Context(), a))
+
 	result, err := h.DS.UploadFile(r.Context(), a, dsclient.UploadFileRequest{
 		Filename:    header.Filename,
 		ContentType: contentType,

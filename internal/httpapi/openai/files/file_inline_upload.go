@@ -104,6 +104,10 @@ func containsInlineUploadPayload(raw any) bool {
 	return false
 }
 
+func HasInlineUploadPayload(req map[string]any) bool {
+	return containsInlineUploadPayload(req)
+}
+
 func WriteInlineFileError(w http.ResponseWriter, err error) {
 	inlineErr, ok := err.(*inlineFileUploadError)
 	if !ok || inlineErr == nil {

@@ -84,6 +84,10 @@ func writeOpenAIInlineFileError(w http.ResponseWriter, err error) {
 	files.WriteInlineFileError(w, err)
 }
 
+func logOpenAILocalRequestRejection(r *http.Request, status int, code, message string, attrs ...any) {
+	shared.LogLocalRequestRejection(r, status, code, message, attrs...)
+}
+
 func mapHistorySplitError(err error) (int, string) {
 	return history.MapError(err)
 }

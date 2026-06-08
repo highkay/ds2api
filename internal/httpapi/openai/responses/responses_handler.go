@@ -1,7 +1,6 @@
 package responses
 
 import (
-	"ds2api/internal/toolcall"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -16,9 +15,9 @@ import (
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
 	"ds2api/internal/promptcompat"
-	"ds2api/internal/riskguard"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
+	"ds2api/internal/toolcall"
 )
 
 func (h *Handler) GetResponseByID(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +47,36 @@ func (h *Handler) GetResponseByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
+	caller, err := h.Auth.DetermineCaller(r)
+	if err != nil {
+		if err == auth.ErrNoAccount {
+			writeOpenAIAccountPoolBusyError(w)
+			return
+		}
+		writeOpenAIError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	owner := responseStoreOwner(caller)
+	if owner == "" {
+		writeOpenAIError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, openAIGeneralMaxSize)
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "too large") {
+			logOpenAILocalRequestRejection(r, http.StatusRequestEntityTooLarge, "request_body_too_large", "request body too large")
+			writeOpenAIError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
+		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if !h.preflightParsedResponsesRequest(w, r, req) {
+		return
+	}
+
 	a, err := h.Auth.Determine(r)
 	if err != nil {
 		if err == auth.ErrNoAccount {
@@ -59,22 +88,7 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	}
 	defer h.Auth.Release(a)
 	r = r.WithContext(auth.WithAuth(r.Context(), a))
-	owner := responseStoreOwner(a)
-	if owner == "" {
-		writeOpenAIError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, openAIGeneralMaxSize)
-	var req map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "too large") {
-			writeOpenAIError(w, http.StatusRequestEntityTooLarge, "request body too large")
-			return
-		}
-		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
 	if err := h.preprocessInlineFileInputs(r.Context(), a, req); err != nil {
 		writeOpenAIInlineFileError(w, err)
 		return
@@ -91,9 +105,7 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, status, message)
 		return
 	}
-	if err := riskguard.CheckCompletion(h.Store, stdReq.FinalPrompt, stdReq.RefFileIDs); err != nil {
-		status, _, message, _ := riskguard.ErrorDetail(err)
-		writeOpenAIError(w, status, message)
+	if !h.writeCompletionRiskRejection(w, r, stdReq) {
 		return
 	}
 

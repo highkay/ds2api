@@ -13,7 +13,6 @@ import (
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 	"ds2api/internal/promptcompat"
-	"ds2api/internal/riskguard"
 	"ds2api/internal/util"
 
 	"github.com/google/uuid"
@@ -29,6 +28,34 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 	internalToken := strings.TrimSpace(r.Header.Get("X-Ds2-Internal-Token"))
 	if internalSecret == "" || subtle.ConstantTimeCompare([]byte(internalToken), []byte(internalSecret)) != 1 {
 		writeOpenAIError(w, http.StatusUnauthorized, "unauthorized internal request")
+		return
+	}
+
+	if _, err := h.Auth.DetermineCaller(r); err != nil {
+		if err == auth.ErrNoAccount {
+			writeOpenAIAccountPoolBusyError(w)
+			return
+		}
+		writeOpenAIError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, openAIGeneralMaxSize)
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "too large") {
+			logOpenAILocalRequestRejection(r, http.StatusRequestEntityTooLarge, "request_body_too_large", "request body too large")
+			writeOpenAIError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
+		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if !util.ToBool(req["stream"]) {
+		writeOpenAIError(w, http.StatusBadRequest, "stream must be true")
+		return
+	}
+	if !h.preflightParsedChatRequest(w, r, req) {
 		return
 	}
 
@@ -49,17 +76,8 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 	}()
 	r = r.WithContext(auth.WithAuth(r.Context(), a))
 
-	var req map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
 	if err := h.preprocessInlineFileInputs(r.Context(), a, req); err != nil {
 		writeOpenAIInlineFileError(w, err)
-		return
-	}
-	if !util.ToBool(req["stream"]) {
-		writeOpenAIError(w, http.StatusBadRequest, "stream must be true")
 		return
 	}
 	stdReq, err := promptcompat.NormalizeOpenAIChatRequest(h.Store, req, requestTraceID(r))
@@ -77,9 +95,7 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 		writeOpenAIError(w, status, message)
 		return
 	}
-	if err := riskguard.CheckCompletion(h.Store, stdReq.FinalPrompt, stdReq.RefFileIDs); err != nil {
-		status, _, message, _ := riskguard.ErrorDetail(err)
-		writeOpenAIError(w, status, message)
+	if !h.writeCompletionRiskRejection(w, r, stdReq) {
 		return
 	}
 

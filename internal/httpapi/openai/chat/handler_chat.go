@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
 	"ds2api/internal/promptcompat"
-	"ds2api/internal/riskguard"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
 	"ds2api/internal/toolcall"
@@ -26,6 +24,30 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	if isVercelStreamPrepareRequest(r) {
 		h.handleVercelStreamPrepare(w, r)
+		return
+	}
+
+	if _, err := h.Auth.DetermineCaller(r); err != nil {
+		if err == auth.ErrNoAccount {
+			writeOpenAIAccountPoolBusyError(w)
+			return
+		}
+		writeOpenAIError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, openAIGeneralMaxSize)
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "too large") {
+			logOpenAILocalRequestRejection(r, http.StatusRequestEntityTooLarge, "request_body_too_large", "request body too large")
+			writeOpenAIError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
+		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if !h.preflightParsedChatRequest(w, r, req) {
 		return
 	}
 
@@ -46,16 +68,6 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	r = r.WithContext(auth.WithAuth(r.Context(), a))
 
-	r.Body = http.MaxBytesReader(w, r.Body, openAIGeneralMaxSize)
-	var req map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "too large") {
-			writeOpenAIError(w, http.StatusRequestEntityTooLarge, "request body too large")
-			return
-		}
-		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
 	if err := h.preprocessInlineFileInputs(r.Context(), a, req); err != nil {
 		writeOpenAIInlineFileError(w, err)
 		return
@@ -71,9 +83,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, status, message)
 		return
 	}
-	if err := riskguard.CheckCompletion(h.Store, stdReq.FinalPrompt, stdReq.RefFileIDs); err != nil {
-		status, _, message, _ := riskguard.ErrorDetail(err)
-		writeOpenAIError(w, status, message)
+	if !h.writeCompletionRiskRejection(w, r, stdReq) {
 		return
 	}
 	historySession := startChatHistory(h.ChatHistory, r, a, stdReq)
@@ -119,43 +129,6 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.handleNonStream(w, resp, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession) {
 		penalizeUpstreamEmptyOutput(a)
-	}
-}
-
-func (h *Handler) autoDeleteRemoteSession(ctx context.Context, a *auth.RequestAuth, sessionID string) {
-	mode := h.Store.AutoDeleteMode()
-	if mode == "none" || a.DeepSeekToken == "" {
-		return
-	}
-	if mode == "all" && !config.RuntimeAllowAutoDeleteAllFrom(h.Store) {
-		config.Logger.Warn("[auto_delete_sessions] all-session delete is disabled by runtime policy; falling back to single-session delete", "account", a.AccountID)
-		mode = "single"
-	}
-
-	deleteBaseCtx := context.WithoutCancel(ctx)
-	deleteCtx, cancel := context.WithTimeout(deleteBaseCtx, 10*time.Second)
-	defer cancel()
-
-	switch mode {
-	case "single":
-		if sessionID == "" {
-			config.Logger.Warn("[auto_delete_sessions] skipped single-session delete because session_id is empty", "account", a.AccountID)
-			return
-		}
-		_, err := h.DS.DeleteSessionForToken(deleteCtx, a.DeepSeekToken, sessionID)
-		if err != nil {
-			config.Logger.Warn("[auto_delete_sessions] failed", "account", a.AccountID, "mode", mode, "session_id", sessionID, "error", err)
-			return
-		}
-		config.Logger.Debug("[auto_delete_sessions] success", "account", a.AccountID, "mode", mode, "session_id", sessionID)
-	case "all":
-		if err := h.DS.DeleteAllSessionsForToken(deleteCtx, a.DeepSeekToken); err != nil {
-			config.Logger.Warn("[auto_delete_sessions] failed", "account", a.AccountID, "mode", mode, "error", err)
-			return
-		}
-		config.Logger.Debug("[auto_delete_sessions] success", "account", a.AccountID, "mode", mode)
-	default:
-		config.Logger.Warn("[auto_delete_sessions] unknown mode", "account", a.AccountID, "mode", mode)
 	}
 }
 

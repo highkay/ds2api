@@ -16,6 +16,10 @@ func (routeAliasAuthStub) Determine(_ *http.Request) (*auth.RequestAuth, error) 
 	return nil, auth.ErrUnauthorized
 }
 
+func (routeAliasAuthStub) DetermineCaller(_ *http.Request) (*auth.RequestAuth, error) {
+	return nil, auth.ErrUnauthorized
+}
+
 func (routeAliasAuthStub) Release(_ *auth.RequestAuth) {}
 
 func TestClaudeRouteAliasesDoNot404(t *testing.T) {

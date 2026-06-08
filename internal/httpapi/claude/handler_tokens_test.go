@@ -18,6 +18,10 @@ func (s countTokensAuthStub) Determine(_ *http.Request) (*auth.RequestAuth, erro
 	return nil, s.err
 }
 
+func (s countTokensAuthStub) DetermineCaller(_ *http.Request) (*auth.RequestAuth, error) {
+	return nil, s.err
+}
+
 func (countTokensAuthStub) Release(_ *auth.RequestAuth) {}
 
 func TestCountTokensNoAccountReturns429(t *testing.T) {
