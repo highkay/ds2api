@@ -132,6 +132,42 @@ func TestPoolRiskBreakerHTTP429Threshold(t *testing.T) {
 	}
 }
 
+func TestPoolPenalizeHealthDoesNotTripRiskBreaker(t *testing.T) {
+	pool := newRiskPoolForTest(t, `{
+		"keys":["k1"],
+		"accounts":[{"email":"acc1@example.com","token":"token1"}],
+		"runtime":{
+			"account_health_enabled":true,
+			"account_health_cooldown_muted_seconds":60,
+			"risk_breaker_enabled":true,
+			"risk_breaker_window_seconds":600,
+			"risk_breaker_mute_cooldown_seconds":60,
+			"risk_breaker_hard_mute_count":2,
+			"risk_breaker_hard_cooldown_seconds":3600
+		}
+	}`)
+	now := time.Unix(1000, 0)
+	pool.now = func() time.Time { return now }
+
+	pool.PenalizeHealth("acc1@example.com", PenaltyMuted)
+
+	risk, _ := pool.Status()["risk"].(map[string]any)
+	if got, _ := risk["cooling_down"].(bool); got {
+		t.Fatalf("expected health-only penalty not to cool risk breaker, risk=%v", risk)
+	}
+	if got := intFromAny(risk["muted_events"]); got != 0 {
+		t.Fatalf("muted_events=%d want=0 risk=%v", got, risk)
+	}
+	if _, ok := pool.Acquire("", nil); ok {
+		t.Fatal("expected account health cooldown to keep penalized account unavailable")
+	}
+
+	now = now.Add(61 * time.Second)
+	if _, ok := pool.Acquire("", nil); !ok {
+		t.Fatal("expected account to become available after health cooldown")
+	}
+}
+
 func intFromAny(v any) int {
 	switch x := v.(type) {
 	case int:

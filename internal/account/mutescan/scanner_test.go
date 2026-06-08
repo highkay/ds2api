@@ -104,7 +104,7 @@ type fakeMutePenalizer struct {
 	ids []string
 }
 
-func (p *fakeMutePenalizer) Penalize(accountID string, kind account.PenaltyKind) {
+func (p *fakeMutePenalizer) PenalizeHealth(accountID string, kind account.PenaltyKind) {
 	if kind != account.PenaltyMuted {
 		return
 	}

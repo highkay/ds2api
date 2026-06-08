@@ -28,7 +28,7 @@ type Checker interface {
 }
 
 type Penalizer interface {
-	Penalize(accountID string, kind account.PenaltyKind)
+	PenalizeHealth(accountID string, kind account.PenaltyKind)
 }
 
 type Summary struct {
@@ -137,7 +137,10 @@ scan:
 					return
 				}
 				if s.penalizer != nil {
-					s.penalizer.Penalize(identifier, account.PenaltyMuted)
+					// Mute scans observe account state out-of-band. They should
+					// cool the individual account without tripping live-request
+					// fleet risk breakers for historical mute state.
+					s.penalizer.PenalizeHealth(identifier, account.PenaltyMuted)
 				}
 				mu.Lock()
 				summary.Muted++
