@@ -339,6 +339,56 @@ func TestDetermineManagedAccountRetriesOtherAccountOnLoginFailure(t *testing.T) 
 	}
 }
 
+func TestDetermineManagedAccountMarksMutedLoginFailure(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["managed-key"],
+		"accounts":[
+			{"email":"muted@example.com","password":"pwd"},
+			{"email":"good@example.com","password":"pwd"}
+		]
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	resolver := NewResolver(store, pool, func(_ context.Context, acc config.Account) (string, error) {
+		if acc.Email == "muted@example.com" {
+			return "", ErrAccountMuted
+		}
+		return "fresh-good-token", nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("x-api-key", "managed-key")
+
+	a, err := resolver.Determine(req)
+	if err != nil {
+		t.Fatalf("determine failed: %v", err)
+	}
+	defer resolver.Release(a)
+	if a.AccountID != "good@example.com" {
+		t.Fatalf("expected fallback to good account, got %q", a.AccountID)
+	}
+	if !a.TriedAccounts["muted@example.com"] {
+		t.Fatalf("expected muted account to be tracked as tried")
+	}
+	muted, ok := store.FindAccount("muted@example.com")
+	if !ok {
+		t.Fatalf("expected muted account to remain in store")
+	}
+	if !muted.Muted || muted.MuteUntil <= float64(time.Now().Unix()) {
+		t.Fatalf("expected muted account with future mute_until, got %#v", muted)
+	}
+	risk, ok := pool.Status()["risk"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected risk status map")
+	}
+	if cooling, _ := risk["cooling_down"].(bool); cooling {
+		t.Fatalf("login-time mute should not trip global risk cooldown: %v", risk)
+	}
+	if got := risk["muted_events"]; got != 0 {
+		t.Fatalf("login-time mute should not record risk muted event, got %v", got)
+	}
+}
+
 func TestDetermineTargetAccountDoesNotFallbackOnLoginFailure(t *testing.T) {
 	t.Setenv("DS2API_CONFIG_JSON", `{
 		"keys":["managed-key"],

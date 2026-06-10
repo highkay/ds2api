@@ -34,6 +34,9 @@ func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) 
 	if err != nil {
 		return "", err
 	}
+	if info := extractMuteInfo(resp); info.Muted {
+		return "", fmt.Errorf("%w: %s", auth.ErrAccountMuted, accountMutedMessage(info))
+	}
 	code := intFrom(resp["code"])
 	if code != 0 {
 		return "", fmt.Errorf("login failed: %v", resp["msg"])

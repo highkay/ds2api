@@ -3,6 +3,8 @@ package client
 import (
 	"errors"
 	"fmt"
+
+	"ds2api/internal/auth"
 )
 
 type FailureKind string
@@ -44,4 +46,12 @@ func IsManagedUnauthorizedError(err error) bool {
 func IsDirectUnauthorizedError(err error) bool {
 	var failure *RequestFailure
 	return errors.As(err, &failure) && failure.Kind == FailureDirectUnauthorized
+}
+
+func IsAccountMutedError(err error) bool {
+	if errors.Is(err, auth.ErrAccountMuted) {
+		return true
+	}
+	var failure *RequestFailure
+	return errors.As(err, &failure) && failure.Kind == FailureAccountMuted
 }

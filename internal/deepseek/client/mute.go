@@ -34,10 +34,20 @@ func extractMuteInfo(resp map[string]any) muteInfo {
 		muteUntil = floatFrom(chat["mute_until"])
 	}
 	combined := strings.ToLower(strings.TrimSpace(msg) + " " + strings.TrimSpace(bizMsg))
-	if bizCode == 5 || isMuted || strings.Contains(combined, "muted") || strings.Contains(combined, "禁言") {
+	if bizCode == 5 || isMuted || isMutedMessage(combined) {
 		return muteInfo{Muted: true, Until: muteUntil}
 	}
 	return muteInfo{}
+}
+
+func isMutedMessage(message string) bool {
+	message = strings.ToLower(strings.TrimSpace(message))
+	return strings.Contains(message, "muted") ||
+		strings.Contains(message, "banned") ||
+		strings.Contains(message, "ban account") ||
+		strings.Contains(message, "user_is_banned") ||
+		strings.Contains(message, "禁言") ||
+		strings.Contains(message, "封禁")
 }
 
 func muteFlagFrom(v any) bool {
@@ -86,11 +96,19 @@ func (c *Client) handleMutedResponse(ctx context.Context, a *auth.RequestAuth, o
 			return true, nil
 		}
 	}
+	return true, accountMutedFailure(op, info)
+}
+
+func accountMutedFailure(op string, info muteInfo) error {
+	return &RequestFailure{Op: op, Kind: FailureAccountMuted, Message: accountMutedMessage(info)}
+}
+
+func accountMutedMessage(info muteInfo) string {
 	msg := "account is muted"
 	if info.Until > 0 {
 		msg = fmt.Sprintf("%s until %.3f", msg, info.Until)
 	}
-	return true, &RequestFailure{Op: op, Kind: FailureAccountMuted, Message: msg}
+	return msg
 }
 
 func (c *Client) detectCompletionMute(ctx context.Context, a *auth.RequestAuth, resp *http.Response) (bool, error) {

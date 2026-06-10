@@ -21,6 +21,7 @@ const authCtxKey ctxKey = "auth_context"
 var (
 	ErrUnauthorized = errors.New("unauthorized: missing auth token")
 	ErrNoAccount    = errors.New("no accounts configured or all accounts are busy")
+	ErrAccountMuted = errors.New("account is muted")
 )
 
 type RequestAuth struct {
@@ -131,7 +132,7 @@ func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, targ
 		if err := r.ensureManagedToken(ctx, a); err != nil {
 			lastEnsureErr = err
 			tried[a.AccountID] = true
-			r.penalize(a, account.PenaltyAuthFailed)
+			r.handleManagedTokenFailure(a, err)
 			r.Pool.Release(a.AccountID)
 			if target != "" {
 				return nil, err
@@ -244,7 +245,7 @@ func (r *Resolver) RefreshToken(ctx context.Context, a *RequestAuth) bool {
 	a.Account.Token = ""
 	if err := r.loginAndPersist(ctx, a); err != nil {
 		config.Logger.Error("[refresh_token] failed", "account", a.AccountID, "error", err)
-		r.penalize(a, account.PenaltyAuthFailed)
+		r.handleManagedTokenFailure(a, err)
 		return false
 	}
 	return true
@@ -292,7 +293,7 @@ func (r *Resolver) SwitchAccountWithPenalty(ctx context.Context, a *RequestAuth,
 		a.Account = acc
 		a.AccountID = acc.Identifier()
 		if err := r.ensureManagedToken(ctx, a); err != nil {
-			r.penalize(a, account.PenaltyAuthFailed)
+			r.handleManagedTokenFailure(a, err)
 			a.TriedAccounts[a.AccountID] = true
 			r.Pool.Release(a.AccountID)
 			continue
@@ -317,6 +318,11 @@ func (a *RequestAuth) SwitchAccountWithPenalty(ctx context.Context, kind account
 }
 
 func (r *Resolver) MarkAccountMuted(a *RequestAuth, muteUntil float64) {
+	r.markManagedAccountMuted(a, muteUntil)
+	r.penalize(a, account.PenaltyMuted)
+}
+
+func (r *Resolver) markManagedAccountMuted(a *RequestAuth, muteUntil float64) {
 	if r == nil || r.Store == nil || a == nil || !a.UseConfigToken || a.AccountID == "" {
 		return
 	}
@@ -329,7 +335,14 @@ func (r *Resolver) MarkAccountMuted(a *RequestAuth, muteUntil float64) {
 	if err := r.Store.MarkAccountMuted(a.AccountID, muteUntil); err != nil {
 		config.Logger.Warn("[account_mute] persist failed", "account", a.AccountID, "mute_until", muteUntil, "error", err)
 	}
-	r.penalize(a, account.PenaltyMuted)
+}
+
+func (r *Resolver) handleManagedTokenFailure(a *RequestAuth, err error) {
+	if errors.Is(err, ErrAccountMuted) {
+		r.markManagedAccountMuted(a, 0)
+		return
+	}
+	r.penalize(a, account.PenaltyAuthFailed)
 }
 
 func (a *RequestAuth) MarkAccountMuted(muteUntil float64) {
