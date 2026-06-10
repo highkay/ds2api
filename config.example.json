@@ -74,7 +74,7 @@
     "retry_after_http_5xx": false,
     "allow_cooldown_account_fallback": false,
     "risk_breaker_enabled": true,
-    "risk_breaker_window_seconds": 600,
+    "risk_breaker_window_seconds": 7200,
     "risk_breaker_mute_cooldown_seconds": 3600,
     "risk_breaker_hard_mute_count": 2,
     "risk_breaker_hard_cooldown_seconds": 21600,

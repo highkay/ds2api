@@ -722,7 +722,7 @@ data: {"type":"message_stop"}
 
 默认风控策略偏保守：`runtime.upstream_max_attempts=1`，`runtime.retry_after_muted` / `retry_after_http_429` / `retry_after_http_403` / `retry_after_network` / `retry_after_http_5xx` 均为 `false`。命中禁言、上游 `429`、上游 `403`、网络或 5xx 失败时，托管账号模式默认记录惩罚并返回错误，不会马上换下一个账号继续重试。
 
-`runtime.risk_breaker_enabled=true` 时，禁言、上游 `429`、上游 `403` 会进入池级风险熔断。默认 10 分钟窗口内任一禁言冷却 1 小时，2 次禁言冷却 6 小时，5 次上游 `429` 或 2 次上游 `403` 冷却 15 分钟。熔断期间账号池不再分配账号，`/admin/queue/status` 的 `risk` 字段会返回 `cooling_down`、`reason`、剩余时间与事件计数。
+`runtime.risk_breaker_enabled=true` 时，禁言、上游 `429`、上游 `403` 会进入池级风险熔断。默认任一禁言会冷却 1 小时；2 小时窗口内 2 次禁言会冷却 6 小时；5 次上游 `429` 或 2 次上游 `403` 冷却 15 分钟。熔断期间账号池不再分配账号，`/admin/queue/status` 的 `risk` 字段会返回 `cooling_down`、`reason`、剩余时间与事件计数。
 
 `runtime.caller_max_inflight` 默认限制同一客户端凭据最多 2 个托管账号请求并发。`runtime.max_prompt_chars`、`runtime.max_ref_files_per_request`、`runtime.max_inline_files_per_request` 会在触达 DeepSeek 前做本地 `413` 拦截。`runtime.prompt_risk_guard_enabled` 默认为 `false`；显式设为 `true` 后，`runtime.prompt_block_rules` 可按“必须全部包含”的 prompt 文本片段在本地返回 `422 prompt_blocked`，仅用于临时拦截已被生产证明确认会触发 Web 风控的业务指纹，不应作为通用内容检测。`runtime.allow_auto_delete_all=false` 时，`auto_delete.mode=all` 会在运行时降级为 `single`。
 

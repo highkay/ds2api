@@ -284,7 +284,7 @@ VERCEL_TEAM_ID=team_xxxxxxxxxxxx   # 个人账号可留空
 - **每账号并发上限** (`account_max_inflight`)：默认 `1`，环境变量已支持，但也可通过 Admin API 热更新。
 - **等待队列上限** (`account_max_queue`)：默认 `0`，表示账号忙时不排队，直接返回 HTTP `429`。
 - **全局并发上限** (`global_max_inflight`)：同上。
-- **池级风险熔断** (`risk_breaker_*`)：默认启用，任一禁言会冷却整个账号池 1 小时；10 分钟内 2 次禁言会冷却 6 小时；上游 `429` / `403` 达阈值会短冷却。
+- **池级风险熔断** (`risk_breaker_*`)：默认启用，任一禁言会冷却整个账号池 1 小时；2 小时内 2 次禁言会冷却 6 小时；上游 `429` / `403` 达阈值会短冷却。
 - **调用方并发与本地预检** (`caller_max_inflight`、`max_prompt_chars`、`max_ref_files_per_request`、`max_inline_files_per_request`、`prompt_risk_guard_enabled`、`prompt_block_rules`)：默认限制单个客户端凭据并发为 `2`，并在触达 DeepSeek 前拦截过长 prompt、过多引用文件和 inline 文件。`prompt_risk_guard_enabled` 默认为 `false`；只有生产证据已确认某个 prompt 指纹会触发 Web 风控时，才建议临时开启并配置 `prompt_block_rules`，指纹命中会本地返回 `422 prompt_blocked`。
 - **全量自动删会话保护** (`allow_auto_delete_all`)：默认 `false`，即使 `auto_delete.mode=all` 也会降级为单会话清理。
 

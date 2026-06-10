@@ -28,7 +28,7 @@ type RiskConfig struct {
 func DefaultRiskConfig() RiskConfig {
 	return RiskConfig{
 		Enabled:             true,
-		WindowSeconds:       600,
+		WindowSeconds:       7200,
 		MuteCooldownSeconds: 3600,
 		HardMuteCount:       2,
 		HardCooldownSeconds: 21600,

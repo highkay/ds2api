@@ -1,6 +1,7 @@
 package account
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -95,6 +96,65 @@ func TestPoolRiskBreakerHardMuteExtendsCooldown(t *testing.T) {
 	}
 	if got := intFromAny(risk["cooldown_remaining"]); got < 3500 {
 		t.Fatalf("cooldown_remaining=%d want hard cooldown risk=%v", got, risk)
+	}
+}
+
+func TestPoolRiskBreakerWindowCatchesHourlyMuteCascade(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		windowSeconds    int
+		wantReason       string
+		wantMutedEvents  int
+		minRemainingSecs int
+	}{
+		{
+			name:             "ten-minute-window-misses-hourly-cascade",
+			windowSeconds:    600,
+			wantReason:       "muted",
+			wantMutedEvents:  1,
+			minRemainingSecs: 50,
+		},
+		{
+			name:             "two-hour-window-hard-cools-hourly-cascade",
+			windowSeconds:    7200,
+			wantReason:       "muted_hard",
+			wantMutedEvents:  2,
+			minRemainingSecs: 3500,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := newRiskPoolForTest(t, fmt.Sprintf(`{
+				"keys":["k1"],
+				"accounts":[{"email":"acc1@example.com","token":"token1"}],
+				"runtime":{
+					"risk_breaker_enabled":true,
+					"risk_breaker_window_seconds":%d,
+					"risk_breaker_mute_cooldown_seconds":60,
+					"risk_breaker_hard_mute_count":2,
+					"risk_breaker_hard_cooldown_seconds":3600,
+					"risk_breaker_http_429_threshold":5,
+					"risk_breaker_http_403_threshold":2,
+					"risk_breaker_soft_cooldown_seconds":30
+				}
+			}`, tc.windowSeconds))
+			now := time.Unix(1000, 0)
+			pool.now = func() time.Time { return now }
+
+			pool.RecordRiskEvent(RiskEventMuted, "acc1@example.com", "caller-a", "deepseek-v4-pro")
+			now = now.Add(61 * time.Minute)
+			pool.RecordRiskEvent(RiskEventMuted, "acc2@example.com", "caller-b", "deepseek-v4-pro")
+
+			risk, _ := pool.Status()["risk"].(map[string]any)
+			if got, _ := risk["reason"].(string); got != tc.wantReason {
+				t.Fatalf("reason=%q want=%q risk=%v", got, tc.wantReason, risk)
+			}
+			if got := intFromAny(risk["muted_events"]); got != tc.wantMutedEvents {
+				t.Fatalf("muted_events=%d want=%d risk=%v", got, tc.wantMutedEvents, risk)
+			}
+			if got := intFromAny(risk["cooldown_remaining"]); got < tc.minRemainingSecs {
+				t.Fatalf("cooldown_remaining=%d want >=%d risk=%v", got, tc.minRemainingSecs, risk)
+			}
+		})
 	}
 }
 

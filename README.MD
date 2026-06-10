@@ -315,7 +315,7 @@ DS2API 默认按 DeepSeek Web 账号安全优先处理上游异常：
 
 - `runtime.upstream_max_attempts` 默认 `1`，同一次请求不会在上游失败后反复尝试。
 - `runtime.retry_after_muted`、`retry_after_http_429`、`retry_after_http_403`、`retry_after_network`、`retry_after_http_5xx` 默认都是 `false`；命中这些失败时会记录账号惩罚并返回错误，而不是立刻换下一个账号继续打。
-- `runtime.risk_breaker_enabled=true` 时，禁言、上游 `429`、上游 `403` 会进入池级风险熔断。默认任一禁言会冷却整个账号池 1 小时；10 分钟窗口内 2 次禁言会冷却 6 小时；5 次上游 `429` 或 2 次上游 `403` 会冷却 15 分钟。
+- `runtime.risk_breaker_enabled=true` 时，禁言、上游 `429`、上游 `403` 会进入池级风险熔断。默认任一禁言会冷却整个账号池 1 小时；2 小时窗口内 2 次禁言会冷却 6 小时；5 次上游 `429` 或 2 次上游 `403` 会冷却 15 分钟。
 - `runtime.allow_cooldown_account_fallback=false` 时，不会在健康冷却中的账号里兜底挑号。
 - `runtime.caller_max_inflight` 默认限制同一客户端凭据最多 2 个托管账号请求并发，避免单个调用方打满账号池。
 - `runtime.max_prompt_chars`、`max_ref_files_per_request`、`max_inline_files_per_request` 会在触达 DeepSeek 前做本地 `413` 拦截，降低超长上下文、大量附件或 inline 文件触发 Web 风控的概率。
