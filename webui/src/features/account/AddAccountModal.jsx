@@ -1,4 +1,5 @@
-import { X } from 'lucide-react'
+import { useState } from 'react'
+import { Eye, EyeOff, X } from 'lucide-react'
 
 export default function AddAccountModal({
     show,
@@ -9,6 +10,8 @@ export default function AddAccountModal({
     onClose,
     onAdd,
 }) {
+    const [showPassword, setShowPassword] = useState(false)
+
     if (!show) {
         return null
     }
@@ -68,13 +71,24 @@ export default function AddAccountModal({
                     </div>
                     <div>
                         <label className="block text-sm font-medium mb-1.5">{t('accountManager.passwordLabel')} <span className="text-destructive">*</span></label>
-                        <input
-                            type="password"
-                            className="input-field bg-[#09090b]"
-                            placeholder={t('accountManager.passwordPlaceholder')}
-                            value={newAccount.password}
-                            onChange={e => setNewAccount({ ...newAccount, password: e.target.value })}
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                className="input-field bg-[#09090b] pr-10"
+                                placeholder={t('accountManager.passwordPlaceholder')}
+                                value={newAccount.password}
+                                onChange={e => setNewAccount({ ...newAccount, password: e.target.value })}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(value => !value)}
+                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                                title={t(showPassword ? 'actions.hidePassword' : 'actions.showPassword')}
+                                aria-label={t(showPassword ? 'actions.hidePassword' : 'actions.showPassword')}
+                            >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
                         <button onClick={onClose} className="px-4 py-2 rounded-lg border border-border hover:bg-secondary transition-colors text-sm font-medium">{t('actions.cancel')}</button>

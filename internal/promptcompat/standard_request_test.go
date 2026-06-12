@@ -36,6 +36,12 @@ func TestStandardRequestCompletionPayloadSetsModelTypeFromResolvedModel(t *testi
 			if got := payload["chat_session_id"]; got != "session-123" {
 				t.Fatalf("unexpected chat_session_id: %#v", got)
 			}
+			if got, ok := payload["action"]; !ok || got != nil {
+				t.Fatalf("expected action nil, got %#v (present=%v)", got, ok)
+			}
+			if got := payload["preempt"]; got != false {
+				t.Fatalf("expected preempt false, got %#v", got)
+			}
 			if got := payload["thinking_enabled"]; got != tc.thinking {
 				t.Fatalf("unexpected thinking_enabled: %#v", got)
 			}

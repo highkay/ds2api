@@ -38,11 +38,12 @@ func (e *inlineFileUploadError) Error() string {
 }
 
 type inlineUploadState struct {
-	ctx          context.Context
-	handler      *Handler
-	auth         *auth.RequestAuth
-	uploadedByID map[string]string
-	uploadCount  int
+	ctx             context.Context
+	handler         *Handler
+	auth            *auth.RequestAuth
+	uploadedByID    map[string]string
+	uploadCount     int
+	targetModelType string
 }
 
 type inlineDecodedFile struct {
@@ -63,10 +64,11 @@ func (h *Handler) PreprocessInlineFileInputs(ctx context.Context, a *auth.Reques
 		return nil
 	}
 	state := &inlineUploadState{
-		ctx:          ctx,
-		handler:      h,
-		auth:         a,
-		uploadedByID: map[string]string{},
+		ctx:             ctx,
+		handler:         h,
+		auth:            a,
+		uploadedByID:    map[string]string{},
+		targetModelType: targetModelTypeForInlineUpload(h.Store, req),
 	}
 	for _, key := range []string{"messages", "input", "attachments"} {
 		if raw, ok := req[key]; ok {
@@ -198,9 +200,10 @@ func (s *inlineUploadState) uploadInlineFile(file inlineDecodedFile) (string, er
 		contentType = http.DetectContentType(file.Data)
 	}
 	result, err := s.handler.DS.UploadFile(s.ctx, s.auth, dsclient.UploadFileRequest{
-		Filename:    file.Filename,
-		ContentType: contentType,
-		Data:        file.Data,
+		Filename:        file.Filename,
+		ContentType:     contentType,
+		Data:            file.Data,
+		TargetModelType: s.targetModelType,
 	}, config.RuntimeUpstreamMaxAttemptsFrom(s.handler.Store))
 	if err != nil {
 		return "", err
@@ -211,6 +214,25 @@ func (s *inlineUploadState) uploadInlineFile(file inlineDecodedFile) (string, er
 	}
 	s.uploadedByID[cacheKey] = fileID
 	return fileID, nil
+}
+
+func targetModelTypeForInlineUpload(store shared.ConfigReader, req map[string]any) string {
+	if req == nil {
+		return ""
+	}
+	requested := strings.TrimSpace(shared.AsString(req["model"]))
+	if requested == "" {
+		return ""
+	}
+	resolved, ok := config.ResolveModel(store, requested)
+	if !ok {
+		return ""
+	}
+	modelType, ok := config.GetModelType(resolved)
+	if !ok {
+		return ""
+	}
+	return modelType
 }
 
 func decodeOpenAIInlineFileBlock(block map[string]any) (inlineDecodedFile, bool, error) {

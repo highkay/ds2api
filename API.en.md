@@ -136,6 +136,7 @@ Gemini-compatible clients can also send `x-goog-api-key`, `?key=`, or `?api_key=
 | GET | `/admin/proxies` | Admin | List proxies |
 | POST | `/admin/proxies` | Admin | Add proxy |
 | PUT | `/admin/proxies/{proxyID}` | Admin | Update proxy (empty password keeps old secret) |
+| PUT | `/admin/proxies/{proxyID}/apply-all` | Admin | Apply proxy to all accounts |
 | DELETE | `/admin/proxies/{proxyID}` | Admin | Delete proxy (auto-unbind referenced accounts) |
 | POST | `/admin/proxies/test` | Admin | Test proxy connectivity |
 | GET | `/admin/accounts` | Admin | Paginated account list |
@@ -817,6 +818,12 @@ Adds a proxy. Request accepts `id` (optional; auto-generated when omitted), `nam
 ### `PUT /admin/proxies/{proxyID}`
 
 Updates a proxy. If `password` is an empty string, the existing secret is preserved.
+
+### `PUT /admin/proxies/{proxyID}/apply-all`
+
+Binds the selected proxy to every account. Returns 404 when the proxy does not exist.
+
+**Response**: `{"success": true, "proxy_id": "proxy-1", "updated": 2}`
 
 ### `DELETE /admin/proxies/{proxyID}`
 

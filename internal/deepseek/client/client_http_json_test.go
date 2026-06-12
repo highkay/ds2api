@@ -45,6 +45,64 @@ func TestPostJSONWithStatusUsesProvidedFallbackClient(t *testing.T) {
 	}
 }
 
+func TestPostJSONWithStatusReturnsDecodeErrorWithPreview(t *testing.T) {
+	client := &Client{}
+	doer := doerFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusForbidden,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`<html>blocked by upstream</html>`)),
+			Request:    req,
+		}, nil
+	})
+
+	_, status, err := client.postJSONWithStatus(
+		context.Background(),
+		doer,
+		doer,
+		"https://example.com/api",
+		nil,
+		map[string]any{"foo": "bar"},
+	)
+	if err == nil {
+		t.Fatal("expected decode error")
+	}
+	if status != http.StatusForbidden {
+		t.Fatalf("status=%d want=%d", status, http.StatusForbidden)
+	}
+	if got := err.Error(); !strings.Contains(got, "decode json response failed") || !strings.Contains(got, "blocked by upstream") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetJSONWithStatusReturnsDecodeErrorWithPreview(t *testing.T) {
+	client := &Client{}
+	doer := doerFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`too many requests`)),
+			Request:    req,
+		}, nil
+	})
+
+	_, status, err := client.getJSONWithStatus(
+		context.Background(),
+		doer,
+		"https://example.com/api",
+		nil,
+	)
+	if err == nil {
+		t.Fatal("expected decode error")
+	}
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("status=%d want=%d", status, http.StatusTooManyRequests)
+	}
+	if got := err.Error(); !strings.Contains(got, "decode json response failed") || !strings.Contains(got, "too many requests") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 type doerFunc func(*http.Request) (*http.Response, error)
 
 func (f doerFunc) Do(req *http.Request) (*http.Response, error) {

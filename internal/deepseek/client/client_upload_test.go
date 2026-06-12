@@ -215,3 +215,64 @@ func TestUploadFileWaitsForProcessedFetchFiles(t *testing.T) {
 		t.Fatalf("expected 4 requests, got %d", call)
 	}
 }
+
+func TestUploadFileForksImageForVisionTargetModel(t *testing.T) {
+	challengeHash := powpkg.DeepSeekHashV1([]byte(powpkg.BuildPrefix("salt", 1712345678) + "42"))
+	powResponse := `{"code":0,"msg":"ok","data":{"biz_code":0,"biz_data":{"challenge":{"algorithm":"DeepSeekHashV1","challenge":"` + hex.EncodeToString(challengeHash[:]) + `","salt":"salt","expire_at":1712345678,"difficulty":1000,"signature":"sig","target_path":"` + dsprotocol.DeepSeekUploadTargetPath + `"}}}}`
+	uploadResponse := `{"code":0,"msg":"ok","data":{"biz_code":0,"biz_data":{"file":{"file_id":"file_upload","filename":"image.png","bytes":4,"status":"processed","purpose":"assistants","is_image":true}}}}`
+	forkResponse := `{"code":0,"msg":"ok","data":{"biz_code":0,"biz_data":{"target_file":{"file_id":"file_vision","filename":"image.png","bytes":4,"status":"processed","purpose":"assistants","is_image":true}}}}`
+
+	var forkPayload map[string]any
+	call := 0
+	client := &Client{
+		regular: doerFunc(func(req *http.Request) (*http.Response, error) {
+			call++
+			bodyBytes, _ := io.ReadAll(req.Body)
+			switch call {
+			case 1:
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(powResponse)), Request: req}, nil
+			case 2:
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(uploadResponse)), Request: req}, nil
+			case 3:
+				if req.Method != http.MethodPost {
+					t.Fatalf("expected POST fork request, got %s", req.Method)
+				}
+				if req.URL.Path != "/api/v0/file/fork_file_task" {
+					t.Fatalf("expected fork file path, got %q", req.URL.Path)
+				}
+				if err := json.Unmarshal(bodyBytes, &forkPayload); err != nil {
+					t.Fatalf("decode fork payload: %v body=%s", err, string(bodyBytes))
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(forkResponse)), Request: req}, nil
+			default:
+				t.Fatalf("unexpected request count %d", call)
+				return nil, nil
+			}
+		}),
+		fallback:   &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) { return nil, nil })},
+		maxRetries: 1,
+	}
+
+	result, err := client.UploadFile(context.Background(), &auth.RequestAuth{DeepSeekToken: "token", TriedAccounts: map[string]bool{}}, UploadFileRequest{
+		Filename:        "image.png",
+		ContentType:     "image/png",
+		Purpose:         "assistants",
+		Data:            []byte("ABCD"),
+		TargetModelType: "vision",
+	}, 1)
+	if err != nil {
+		t.Fatalf("UploadFile error: %v", err)
+	}
+	if result.ID != "file_vision" {
+		t.Fatalf("expected forked file id file_vision, got %#v", result)
+	}
+	if forkPayload["file_id"] != "file_upload" {
+		t.Fatalf("expected source file id file_upload, got %#v", forkPayload)
+	}
+	if forkPayload["to_model_type"] != "vision" {
+		t.Fatalf("expected to_model_type=vision, got %#v", forkPayload)
+	}
+	if call != 3 {
+		t.Fatalf("expected 3 requests, got %d", call)
+	}
+}

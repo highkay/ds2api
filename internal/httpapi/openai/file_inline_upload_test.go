@@ -73,6 +73,7 @@ func TestPreprocessInlineFileInputsReplacesDataURLAndCollectsRefFileIDs(t *testi
 	ds := &inlineUploadDSStub{}
 	h := &openAITestSurface{DS: ds}
 	req := map[string]any{
+		"model": "deepseek-v4-vision",
 		"messages": []any{
 			map[string]any{
 				"role": "user",
@@ -102,6 +103,9 @@ func TestPreprocessInlineFileInputsReplacesDataURLAndCollectsRefFileIDs(t *testi
 	}
 	if ds.uploadCalls[0].Filename != "image.png" {
 		t.Fatalf("expected inferred filename image.png, got %q", ds.uploadCalls[0].Filename)
+	}
+	if ds.uploadCalls[0].TargetModelType != "vision" {
+		t.Fatalf("expected target model type vision, got %q", ds.uploadCalls[0].TargetModelType)
 	}
 	messages, _ := req["messages"].([]any)
 	first, _ := messages[0].(map[string]any)

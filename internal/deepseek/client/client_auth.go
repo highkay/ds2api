@@ -39,17 +39,18 @@ func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) 
 	}
 	code := intFrom(resp["code"])
 	if code != 0 {
-		return "", fmt.Errorf("login failed: %v", resp["msg"])
+		return "", fmt.Errorf("login failed: code=%d msg=%v body=%s", code, resp["msg"], previewJSONMap(resp))
 	}
 	data, _ := resp["data"].(map[string]any)
-	if intFrom(data["biz_code"]) != 0 {
-		return "", fmt.Errorf("login failed: %v", data["biz_msg"])
+	bizCode := intFrom(data["biz_code"])
+	if bizCode != 0 {
+		return "", fmt.Errorf("login failed: code=%d biz_code=%d msg=%v biz_msg=%v body=%s", code, bizCode, resp["msg"], data["biz_msg"], previewJSONMap(resp))
 	}
 	bizData, _ := data["biz_data"].(map[string]any)
 	user, _ := bizData["user"].(map[string]any)
 	token, _ := user["token"].(string)
 	if strings.TrimSpace(token) == "" {
-		return "", errors.New("missing login token")
+		return "", fmt.Errorf("missing login token: body=%s", previewJSONMap(resp))
 	}
 	return token, nil
 }

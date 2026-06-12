@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"ds2api/internal/config"
@@ -58,7 +59,9 @@ func (c *Client) postJSONWithStatus(ctx context.Context, doer trans.Doer, fallba
 	out := map[string]any{}
 	if len(payloadBytes) > 0 {
 		if err := json.Unmarshal(payloadBytes, &out); err != nil {
-			config.Logger.Warn("[deepseek] json parse failed", "url", url, "status", resp.StatusCode, "content_encoding", resp.Header.Get("Content-Encoding"), "preview", preview(payloadBytes))
+			previewText := preview(payloadBytes)
+			config.Logger.Warn("[deepseek] json parse failed", "url", url, "status", resp.StatusCode, "content_encoding", resp.Header.Get("Content-Encoding"), "preview", previewText)
+			return nil, resp.StatusCode, fmt.Errorf("decode json response failed: status=%d preview=%q: %w", resp.StatusCode, previewText, err)
 		}
 	}
 	return out, resp.StatusCode, nil
@@ -96,7 +99,9 @@ func (c *Client) getJSONWithStatus(ctx context.Context, doer trans.Doer, url str
 	out := map[string]any{}
 	if len(payloadBytes) > 0 {
 		if err := json.Unmarshal(payloadBytes, &out); err != nil {
-			config.Logger.Warn("[deepseek] json parse failed", "url", url, "status", resp.StatusCode, "content_encoding", resp.Header.Get("Content-Encoding"), "preview", preview(payloadBytes))
+			previewText := preview(payloadBytes)
+			config.Logger.Warn("[deepseek] json parse failed", "url", url, "status", resp.StatusCode, "content_encoding", resp.Header.Get("Content-Encoding"), "preview", previewText)
+			return nil, resp.StatusCode, fmt.Errorf("decode json response failed: status=%d preview=%q: %w", resp.StatusCode, previewText, err)
 		}
 	}
 	return out, resp.StatusCode, nil

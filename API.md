@@ -136,6 +136,7 @@ Gemini 兼容客户端还可以使用 `x-goog-api-key`、`?key=` 或 `?api_key=`
 | GET | `/admin/proxies` | Admin | 代理列表 |
 | POST | `/admin/proxies` | Admin | 添加代理 |
 | PUT | `/admin/proxies/{proxyID}` | Admin | 更新代理（留空 password 表示保留原密码） |
+| PUT | `/admin/proxies/{proxyID}/apply-all` | Admin | 将指定代理应用到全部账号 |
 | DELETE | `/admin/proxies/{proxyID}` | Admin | 删除代理（自动解绑引用该代理的账号） |
 | POST | `/admin/proxies/test` | Admin | 测试代理连通性 |
 | GET | `/admin/accounts` | Admin | 分页账号列表 |
@@ -823,6 +824,12 @@ data: {"type":"message_stop"}
 ### `PUT /admin/proxies/{proxyID}`
 
 更新指定代理。若请求中 `password` 为空字符串，则保留原密码。
+
+### `PUT /admin/proxies/{proxyID}/apply-all`
+
+将指定代理绑定到所有账号。代理不存在时返回 404。
+
+**响应**：`{"success": true, "proxy_id": "proxy-1", "updated": 2}`
 
 ### `DELETE /admin/proxies/{proxyID}`
 

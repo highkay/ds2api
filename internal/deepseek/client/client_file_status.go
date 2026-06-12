@@ -170,7 +170,9 @@ func mergeUploadFileResults(dst, src *UploadFileResult) {
 	if strings.TrimSpace(src.Purpose) != "" {
 		dst.Purpose = strings.TrimSpace(src.Purpose)
 	}
-	dst.IsImage = src.IsImage
+	if src.IsImage {
+		dst.IsImage = true
+	}
 	if len(src.Raw) > 0 {
 		dst.Raw = src.Raw
 	}

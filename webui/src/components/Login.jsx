@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Key, ArrowRight, ShieldCheck, Lock, Check } from 'lucide-react'
+import { Key, ArrowRight, ShieldCheck, Lock, Check, Eye, EyeOff } from 'lucide-react'
 import clsx from 'clsx'
 import { useI18n } from '../i18n'
 import LanguageToggle from './LanguageToggle'
@@ -9,6 +9,7 @@ export default function Login({ onLogin, onMessage }) {
     const [adminKey, setAdminKey] = useState('')
     const [loading, setLoading] = useState(false)
     const [remember, setRemember] = useState(true)
+    const [showAdminKey, setShowAdminKey] = useState(false)
 
     const handleLogin = async (e) => {
         e.preventDefault()
@@ -68,13 +69,22 @@ export default function Login({ onLogin, onMessage }) {
                                     <Key className="w-4 h-4" />
                                 </div>
                                 <input
-                                    type="password"
-                                    className="w-full bg-[#09090b] border border-border rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all placeholder:text-muted-foreground/30 text-foreground"
+                                    type={showAdminKey ? 'text' : 'password'}
+                                    className="w-full bg-[#09090b] border border-border rounded-xl pl-10 pr-12 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all placeholder:text-muted-foreground/30 text-foreground"
                                     placeholder={t('login.adminKeyPlaceholder')}
                                     value={adminKey}
                                     onChange={e => setAdminKey(e.target.value)}
                                     autoFocus
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAdminKey(value => !value)}
+                                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-muted-foreground hover:text-foreground transition-colors"
+                                    title={t(showAdminKey ? 'actions.hidePassword' : 'actions.showPassword')}
+                                    aria-label={t(showAdminKey ? 'actions.hidePassword' : 'actions.showPassword')}
+                                >
+                                    {showAdminKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
                             </div>
                         </div>
 

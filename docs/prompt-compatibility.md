@@ -79,9 +79,11 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
 
 ```json
 {
+  "action": null,
   "chat_session_id": "session-id",
   "model_type": "default",
   "parent_message_id": null,
+  "preempt": false,
   "prompt": "<｜begin▁of▁sentence｜>...",
   "ref_file_ids": [
     "file-history",
@@ -97,6 +99,8 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
 
 - `prompt` 才是对话上下文主载体。
 - `ref_file_ids` 只承载文件引用，不承载普通文本消息。
+- `action:null` 和 `preempt:false` 是对齐 DeepSeek Web completion 外形的空操作字段；默认组装会带上它们，显式 passthrough 仍可覆盖同名字段。
+- OpenAI Chat / Responses 的 inline 图片上传会先解析请求模型/别名到 DeepSeek model type；目标为 `vision` 且上传内容是图片时，上传并等待 ready 后会调用 DeepSeek `/api/v0/file/fork_file_task`，把普通 file id 转换成 vision 可用 id，再写入 `ref_file_ids`。非 vision 模型和普通文件不转换。
 - `tools` 不会作为“原生工具 schema”直接下发给下游，而是被改写进 `prompt`。
 - OpenAI Chat / Responses 原生走统一 OpenAI 标准化与 DeepSeek payload 组装；Claude / Gemini 会尽量复用 OpenAI prompt/tool 语义，其中 Gemini 直接复用 `promptcompat.BuildOpenAIPromptForAdapter`，Claude 消息接口在可代理场景会转换为 OpenAI chat 形态再执行。
 - 客户端传入的 thinking / reasoning 开关会被归一到下游 `thinking_enabled`。Gemini `generationConfig.thinkingConfig.thinkingBudget` 会翻译成同一套 thinking 开关；关闭时即使上游返回 `response/thinking_content`，兼容层也不会把它当作可见正文输出。Claude surface 在流式请求且未显式声明 `thinking` 时，仍按 Anthropic 语义默认关闭；但在非流式代理场景，兼容层会内部开启一次下游 thinking，用于捕获“正文为空、工具调用落在 thinking 里”的情况，随后在回包前剥离用户不可见的 thinking block。

@@ -21,6 +21,7 @@ const (
 	DeepSeekContinueURL          = "https://chat.deepseek.com/api/v0/chat/continue"
 	DeepSeekUploadFileURL        = "https://chat.deepseek.com/api/v0/file/upload_file"
 	DeepSeekFetchFilesURL        = "https://chat.deepseek.com/api/v0/file/fetch_files"
+	DeepSeekForkFileTaskURL      = "https://chat.deepseek.com/api/v0/file/fork_file_task"
 	DeepSeekFetchSessionURL      = "https://chat.deepseek.com/api/v0/chat_session/fetch_page"
 	DeepSeekDeleteSessionURL     = "https://chat.deepseek.com/api/v0/chat_session/delete"
 	DeepSeekDeleteAllSessionsURL = "https://chat.deepseek.com/api/v0/chat_session/delete_all"

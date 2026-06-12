@@ -21,10 +21,11 @@ import (
 )
 
 type UploadFileRequest struct {
-	Filename    string
-	ContentType string
-	Purpose     string
-	Data        []byte
+	Filename        string
+	ContentType     string
+	Purpose         string
+	Data            []byte
+	TargetModelType string
 }
 
 type UploadFileResult struct {
@@ -64,6 +65,9 @@ func (c *Client) UploadFile(ctx context.Context, a *auth.RequestAuth, req Upload
 		"content_type": contentType,
 		"purpose":      purpose,
 		"bytes":        len(req.Data),
+	}
+	if targetModelType := strings.TrimSpace(req.TargetModelType); targetModelType != "" {
+		capturePayload["target_model_type"] = targetModelType
 	}
 	captureSession := c.capture.Start("deepseek_upload_file", dsprotocol.DeepSeekUploadFileURL, a.AccountID, capturePayload)
 	attempts := 0
@@ -146,7 +150,7 @@ func (c *Client) UploadFile(ctx context.Context, a *auth.RequestAuth, req Upload
 			if err := c.waitForUploadedFile(ctx, a, result); err != nil {
 				return nil, err
 			}
-			return result, nil
+			return c.forkUploadedFileIfNeeded(ctx, a, result, req.TargetModelType, contentType, maxAttempts)
 		}
 		config.Logger.Warn("[upload_file] failed", "status", resp.StatusCode, "code", code, "biz_code", bizCode, "msg", msg, "biz_msg", bizMsg, "account", a.AccountID, "filename", filename)
 		powHeader = ""
@@ -180,6 +184,126 @@ func (c *Client) UploadFile(ctx context.Context, a *auth.RequestAuth, req Upload
 		return nil, &RequestFailure{Op: "upload file", Kind: lastFailureKind, Message: lastFailureMessage}
 	}
 	return nil, errors.New("upload file failed")
+}
+
+func (c *Client) forkUploadedFileIfNeeded(ctx context.Context, a *auth.RequestAuth, result *UploadFileResult, targetModelType string, contentType string, maxAttempts int) (*UploadFileResult, error) {
+	if result == nil {
+		return result, nil
+	}
+	if !shouldForkUploadedFileToModelType(result, targetModelType, contentType) {
+		return result, nil
+	}
+	forked, err := c.ForkFileToModelType(ctx, a, result.ID, strings.TrimSpace(targetModelType), maxAttempts)
+	if err != nil {
+		return nil, err
+	}
+	mergeUploadFileResults(result, forked)
+	return result, nil
+}
+
+func shouldForkUploadedFileToModelType(result *UploadFileResult, targetModelType string, contentType string) bool {
+	if result == nil || strings.TrimSpace(result.ID) == "" {
+		return false
+	}
+	if strings.ToLower(strings.TrimSpace(targetModelType)) != "vision" {
+		return false
+	}
+	if result.IsImage {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "image/")
+}
+
+func (c *Client) ForkFileToModelType(ctx context.Context, a *auth.RequestAuth, fileID string, modelType string, maxAttempts int) (*UploadFileResult, error) {
+	fileID = strings.TrimSpace(fileID)
+	modelType = strings.TrimSpace(modelType)
+	if fileID == "" {
+		return nil, errors.New("file id is required")
+	}
+	if modelType == "" {
+		return nil, errors.New("target model type is required")
+	}
+	if maxAttempts <= 0 {
+		maxAttempts = c.maxRetries
+	}
+	attempts := 0
+	refreshed := false
+	lastFailureKind := FailureUnknown
+	lastFailureMessage := ""
+	payload := map[string]any{
+		"file_id":       fileID,
+		"to_model_type": modelType,
+	}
+	for attempts < maxAttempts {
+		clients := c.requestClientsForAuth(ctx, a)
+		resp, status, err := c.postJSONWithStatus(ctx, clients.regular, clients.fallback, dsprotocol.DeepSeekForkFileTaskURL, c.authHeaders(a.DeepSeekToken), payload)
+		if err != nil {
+			config.Logger.Warn("[fork_file_task] request error", "error", err, "account", a.AccountID, "file_id", fileID, "model_type", modelType)
+			lastFailureKind = FailureUnknown
+			lastFailureMessage = err.Error()
+			if switchAccountAfterPenalty(ctx, a, account.PenaltyNetwork) {
+				refreshed = false
+				attempts++
+				continue
+			}
+			return nil, err
+		}
+
+		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
+		if muted, muteErr := c.handleMutedResponse(ctx, a, "fork file task", resp); muted {
+			if muteErr != nil {
+				return nil, muteErr
+			}
+			refreshed = false
+			attempts++
+			continue
+		}
+		if status == http.StatusOK && code == 0 && bizCode == 0 {
+			result := extractUploadFileResult(resp)
+			result.Raw = resp
+			if result.ID == "" {
+				return nil, errors.New("fork file task succeeded without file id")
+			}
+			if result.AccountID == "" {
+				result.AccountID = a.AccountID
+			}
+			return result, nil
+		}
+
+		config.Logger.Warn("[fork_file_task] failed", "status", status, "code", code, "biz_code", bizCode, "msg", msg, "biz_msg", bizMsg, "account", a.AccountID, "file_id", fileID, "model_type", modelType)
+		lastFailureMessage = failureMessage(msg, bizMsg, "fork file task failed")
+		if isTokenInvalid(status, code, bizCode, msg, bizMsg) || isAuthIndicativeBizFailure(msg, bizMsg) {
+			lastFailureKind = authFailureKind(a.UseConfigToken)
+		} else {
+			lastFailureKind = FailureUnknown
+		}
+		if a.UseConfigToken {
+			if !refreshed && shouldAttemptRefresh(status, code, bizCode, msg, bizMsg) {
+				if c.Auth.RefreshToken(ctx, a) {
+					refreshed = true
+					attempts++
+					continue
+				}
+			}
+			penalty := penaltyForFailedStatus(status, code, bizCode, msg, bizMsg)
+			if switchAccountAfterPenalty(ctx, a, penalty) {
+				refreshed = false
+				attempts++
+				continue
+			}
+			if penalty != account.PenaltyUnknown {
+				return nil, &RequestFailure{Op: "fork file task", Kind: lastFailureKind, Message: lastFailureMessage}
+			}
+		}
+		attempts++
+	}
+	if lastFailureKind != FailureUnknown {
+		return nil, &RequestFailure{Op: "fork file task", Kind: lastFailureKind, Message: lastFailureMessage}
+	}
+	if strings.TrimSpace(lastFailureMessage) != "" {
+		return nil, errors.New(lastFailureMessage)
+	}
+	return nil, errors.New("fork file task failed")
 }
 
 func buildUploadMultipartBody(filename, contentType string, data []byte) ([]byte, string, error) {
@@ -243,7 +367,7 @@ func extractUploadFileResult(resp map[string]any) *UploadFileResult {
 		if parent == nil {
 			continue
 		}
-		for _, key := range []string{"file", "biz_data", "data"} {
+		for _, key := range []string{"file", "target_file", "new_file", "fork_file", "result", "biz_data", "data"} {
 			if nested, ok := parent[key].(map[string]any); ok {
 				searchMaps = append(searchMaps, nested)
 			}

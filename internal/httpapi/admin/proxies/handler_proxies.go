@@ -144,6 +144,39 @@ func (h *Handler) deleteProxy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
+func (h *Handler) applyProxyToAllAccounts(w http.ResponseWriter, r *http.Request) {
+	proxyID := strings.TrimSpace(chi.URLParam(r, "proxyID"))
+	if decoded, err := url.PathUnescape(proxyID); err == nil {
+		proxyID = strings.TrimSpace(decoded)
+	}
+	if proxyID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "代理不能为空"})
+		return
+	}
+
+	updated := 0
+	err := h.Store.Update(func(c *config.Config) error {
+		if _, ok := findProxyByID(*c, proxyID); !ok {
+			return newRequestError("代理不存在")
+		}
+		for i := range c.Accounts {
+			c.Accounts[i].ProxyID = proxyID
+			updated++
+		}
+		return validateProxyMutation(c)
+	})
+	if err != nil {
+		if detail, ok := requestErrorDetail(err); ok {
+			writeJSON(w, http.StatusNotFound, map[string]any{"detail": detail})
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
+		return
+	}
+	h.Pool.Reset()
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "proxy_id": proxyID, "updated": updated})
+}
+
 func (h *Handler) testProxy(w http.ResponseWriter, r *http.Request) {
 	var req map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&req)

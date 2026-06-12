@@ -90,6 +90,49 @@ npm run build --prefix webui
 
 如果你只想跳过这些 preflight 检查，可以直接运行 `go run ./cmd/ds2api-tests --no-preflight`。
 
+### DeepSeek upstream 四段探针 | Four-Stage Probe
+
+受保护的 live 测试可用真实账号跑 DeepSeek 四段链路：登录 -> 建会话 -> PoW -> completion。它不会打印 token、password 或完整响应体，适合在评估请求外形、登录诊断或上游风控问题前先建立基线。
+
+默认会用同一个账号依次跑两种 profile：
+
+- `current-android`：当前主线运行时形态，`DeviceID(accountID)` + `os=Android` + `{"agent":"chat"}` session payload。
+- `candidate-web`：候选 Web 形态，随机 Web `device_id` + `os=web` + Web headers + 空 session payload + 标准 HTTP 优先登录。
+
+```powershell
+$env:DS2API_TEST_EMAIL="name@example.com"
+$env:DS2API_TEST_PASSWORD="..."
+go test -tags live_deepseek_probe ./internal/deepseek/client -run TestLiveDeepSeekFourStageProbe -count=1 -v
+```
+
+也可以用 `$env:DS2API_TEST_MOBILE` 替代 email。若不设置直接账号变量，探针会读取 `DS2API_CONFIG_PATH` / `DS2API_CONFIG_JSON`，或仓库根目录 `config.json`，并选择第一个 active 且带 password 的账号；可用 `DS2API_PROBE_ACCOUNT` 或 `DS2API_TEST_ACCOUNT` 按账号标识、邮箱、手机号、名称、备注或代理 ID 过滤。
+
+常用开关：
+
+```powershell
+$env:DS2API_PROBE_PROFILE="current-android"  # 或 candidate-web / all
+$env:DS2API_PROBE_TIMEOUT_SECONDS="150"
+go test -tags live_deepseek_probe ./internal/deepseek/client -run TestLiveDeepSeekFourStageProbe -count=1 -v
+```
+
+也可以用 `DS2API_PROBE_ACCOUNT_INDEX` 指定 `config.accounts` 中的账号下标，适合对线上配置做低频抽样时复现同一个账号。探针会对账号标识脱敏，不会打印 password、token 或完整响应体。
+
+请求外形改动仍必须以真实 A/B 结果为准：同账号、同代理、同模型比较登录 `code/biz_code`、session、PoW、completion 首包、403/429、空回复和耗时分布后，再决定是否进入正式运行时代码。
+
+如果要验证“候选请求外形是否降低风控/封禁”，不要只跑上面的单次四段探针。应使用多轮 A/B 探针，它会用同一个账号重复执行当前稳定形态和候选 Web 形态，并统计成功率、登录/session/PoW/completion 失败、403、429、空回复，以及错误文本中的封禁、限流、验证码、风控等风险分类。
+
+```powershell
+$env:DS2API_TEST_EMAIL="name@example.com"
+$env:DS2API_TEST_PASSWORD="..."
+$env:DS2API_PROBE_ITERATIONS="10"
+$env:DS2API_PROBE_SLEEP_MS="3000"
+go test -tags live_deepseek_probe ./internal/deepseek/client -run TestLiveDeepSeekBanRiskABProbe -count=1 -v
+```
+
+也可以继续用 `DS2API_CONFIG_PATH` / `DS2API_CONFIG_JSON` / 仓库根目录 `config.json` 提供账号。`DS2API_PROBE_PROFILE` 可限制为 `current-android` 或 `candidate-web`；默认跑两者。`DS2API_PROBE_ITERATIONS` 默认 `3`，上限 `50`；正式判断建议至少跑 `10` 轮并设置几秒间隔，避免探针本身过度触发限流。
+
+判读标准：候选形态只有在 `ok` 不低于当前形态、且 `risk_events` / `status_403` / `status_429` / 空回复明显更少时，才算有进入运行时代码的证据。completion 阶段不能只看 HTTP 200；探针会解析首段响应体，只有 DeepSeek SSE 中出现实际内容才算成功。HTTP 200 但 body 是 `biz_code=5 user is muted`、`USER_IS_BANNED`、验证码或风控 JSON，都算失败。一次性全成功只能说明暂时可用，不能证明长期降低封禁；如果账号池已整体 muted/banned，应先修复账号池状态，而不是扩大 A/B 压测。
+
 ---
 
 ## CLI 参数 | CLI Flags

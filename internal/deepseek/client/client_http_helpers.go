@@ -1,7 +1,9 @@
 package client
 
 import (
+	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -32,6 +34,52 @@ func preview(b []byte) string {
 		return s[:160]
 	}
 	return s
+}
+
+func previewJSONMap(body map[string]any) string {
+	if len(body) == 0 {
+		return "{}"
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(redactPreviewValue(body)); err != nil {
+		return "<unavailable>"
+	}
+	return preview(bytes.TrimSpace(buf.Bytes()))
+}
+
+func redactPreviewValue(v any) any {
+	switch typed := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for k, value := range typed {
+			if sensitivePreviewKey(k) {
+				out[k] = "<redacted>"
+				continue
+			}
+			out[k] = redactPreviewValue(value)
+		}
+		return out
+	case []any:
+		out := make([]any, 0, len(typed))
+		for _, value := range typed {
+			out = append(out, redactPreviewValue(value))
+		}
+		return out
+	default:
+		return typed
+	}
+}
+
+func sensitivePreviewKey(key string) bool {
+	k := strings.ToLower(strings.TrimSpace(key))
+	return strings.Contains(k, "token") ||
+		strings.Contains(k, "password") ||
+		strings.Contains(k, "authorization") ||
+		strings.Contains(k, "cookie") ||
+		strings.Contains(k, "secret") ||
+		strings.Contains(k, "credential")
 }
 
 func (c *Client) jsonHeaders(headers map[string]string) map[string]string {

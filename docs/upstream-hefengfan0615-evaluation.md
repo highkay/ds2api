@@ -150,3 +150,41 @@ go test ./internal/promptcompat ./internal/format/openai ./internal/httpapi/open
    - 用真实四段探针证明成功率提升后，再做 config/runtime 开关。
 4. 如果优先级足够，下一步应写一个可复用的 live fingerprint A/B harness，而不是在业务代码里直接试错。
 5. 2026-05-25 新增的 Qwen2API 改造不应纳入 DS2API 主线。账号感知模型列表可以作为独立 WebUI/接口需求重新设计，但必须保留 DeepSeek `p/v` SSE 解析、PoW、Go/Node stream 对齐和当前模型别名契约。
+
+## 2026-06-12 跟进
+
+本轮刷新 `hefengfan0615/ds2api:main` 到 `bfa9a2d`。该分支重新回到 DeepSeek Web 请求外形方向，同时混入默认公共代理池、区域性 GOPROXY/npm 镜像和仓库内 `deepseek.py` 参考实现。
+
+已按本仓库边界吸收的低风险小块：
+
+- 上游返回非 JSON body 时，`postJSONWithStatus` / `getJSONWithStatus` 不再静默返回空 map，而是返回包含 HTTP status 和 body preview 的 decode error。
+- 登录失败、`biz_code` 失败和缺 token 错误会带脱敏 body preview；`token`、`password`、`authorization`、`cookie`、`secret`、`credential` 等字段会被替换为 `<redacted>`。
+- 标准 completion payload 增加 DeepSeek Web 兼容的空操作字段 `action:null` 和 `preempt:false`。
+- 增加 `live_deepseek_probe` build tag 下的真实四段 A/B 探针测试：登录 -> 建会话 -> PoW -> completion；同账号可跑 `current-android` 与 `candidate-web` 两种 profile。测试只记录阶段、耗时、状态和字节数，不打印 token/password/完整响应体。
+- 增加同 build tag 下的多轮 ban-risk A/B 探针：同账号重复跑两种 profile，统计 `ok`、登录/session/PoW/completion 失败、403、429、空回复，以及封禁、限流、验证码、风控等风险分类。这个探针才用于判断请求外形是否可能降低封禁；单次四段探针只用于验证链路可达。
+
+仍未采用的请求外形/运行时改动：
+
+- 不改默认登录 profile：仍保持稳定 `DeviceID(accountID)`、`os=Android` 和现有 base headers。
+- 不改默认 session payload：仍发送 `{"agent":"chat"}`，未改成空 body。
+- 不采用标准 HTTP 优先登录、Web headers、随机 device id、`os=web`、mobile `area_code="+86"`。
+- 不采用默认公共代理池、区域性构建镜像默认值或把 `deepseek.py` 作为运行时资产。
+
+真实四段 A/B 已用 `admin@fnos` 上的线上实例凭据补跑。实例形态：
+
+- 容器：`ds2api`，镜像 `ghcr.io/highkay/ds2api:sha-6d143e8`，`6011 -> 5001`。
+- 配置：`/home/admin/ds2api/config.json`，`accounts=86`，`proxies=0`，`credential_slots=86`。
+- 线上配置读回：`86/86` 个账号带 `muted` 标记或未来 `mute_until`。
+- 最近 24 小时容器日志持续出现 `/v1/chat/completions` 的 `401` 和 `429`，说明线上账号池已经处在不可用或风险冷却状态。
+
+探针先跑同账号 `current-android` vs `candidate-web`。早期只看 status/bytes 时，`candidate-web` 曾出现 HTTP 200 且 121 bytes，后续补强 body 分类后确认这是误判：响应体是 `{"code":0,"data":{"biz_code":5,"biz_msg":"user is muted",...}}`，不是 SSE 内容。
+
+补强后的真实结果：
+
+- `current-android` 在首个线上账号上登录/session/PoW 通过，但 completion 返回 `account is muted until ...`。
+- `candidate-web` 对前 6 个线上账号抽样：0 个成功；5 个 completion `biz_code=5 user is muted`，1 个登录 `biz_code=10 USER_IS_BANNED`。
+- `candidate-web` 对稀疏账号下标 `10/20/30/40/50/60/70/80` 抽样：0 个成功；一部分登录 `USER_IS_BANNED`，一部分登录/session/PoW 通过但 completion `user is muted`。
+
+结论：`candidate-web` 没有在当前线上凭据池证明能减少封禁或绕过 mute。更重要的是，completion 阶段必须把 HTTP 200 JSON 错误体视作失败，不能用 status 200 证明请求外形有效。默认运行时仍保持 `current-android` 形态；`hefengfan0615` 的 Web headers、随机 Web `device_id`、`os=web`、空 session body 和标准 HTTP 优先登录不进入正式代码。
+
+降低封禁不能用静态 diff、无效账号登录或 HTTP 200 空判断证明。需要在存在健康账号池时继续用 `TestLiveDeepSeekBanRiskABProbe` 做同账号、同代理、同模型低频 A/B；只有候选 profile 在 completion 成功率不下降的前提下显著减少 `risk_events`、403、429、JSON 风控错误或空回复，才允许进入正式运行时代码。

@@ -185,6 +185,74 @@ func TestUpdateAccountProxyAssignsProxyID(t *testing.T) {
 	}
 }
 
+func TestApplyProxyToAllAccountsAssignsProxyID(t *testing.T) {
+	h := newAdminProxyTestHandler(t, `{
+		"proxies":[
+			{"id":"proxy-1","name":"Node 1","type":"socks5h","host":"127.0.0.1","port":1080},
+			{"id":"proxy-2","name":"Node 2","type":"socks5h","host":"127.0.0.2","port":1080}
+		],
+		"accounts":[
+			{"email":"u1@example.com","password":"pwd"},
+			{"email":"u2@example.com","password":"pwd","proxy_id":"proxy-2"}
+		]
+	}`)
+
+	r := chi.NewRouter()
+	r.Put("/admin/proxies/{proxyID}/apply-all", h.applyProxyToAllAccounts)
+
+	req := httptest.NewRequest(http.MethodPut, "/admin/proxies/proxy-1/apply-all", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["proxy_id"] != "proxy-1" {
+		t.Fatalf("expected proxy_id proxy-1, got %#v", payload)
+	}
+	if got, _ := payload["updated"].(float64); got != 2 {
+		t.Fatalf("expected updated=2, got %#v", payload["updated"])
+	}
+	for _, identifier := range []string{"u1@example.com", "u2@example.com"} {
+		acc, ok := h.Store.FindAccount(identifier)
+		if !ok {
+			t.Fatalf("expected account %s", identifier)
+		}
+		if acc.ProxyID != "proxy-1" {
+			t.Fatalf("expected %s proxy_id proxy-1, got %#v", identifier, acc)
+		}
+	}
+}
+
+func TestApplyProxyToAllAccountsRejectsMissingProxy(t *testing.T) {
+	h := newAdminProxyTestHandler(t, `{
+		"proxies":[{"id":"proxy-1","name":"Node 1","type":"socks5h","host":"127.0.0.1","port":1080}],
+		"accounts":[{"email":"u@example.com","password":"pwd","proxy_id":"proxy-1"}]
+	}`)
+
+	r := chi.NewRouter()
+	r.Put("/admin/proxies/{proxyID}/apply-all", h.applyProxyToAllAccounts)
+
+	req := httptest.NewRequest(http.MethodPut, "/admin/proxies/missing/apply-all", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	acc, ok := h.Store.FindAccount("u@example.com")
+	if !ok {
+		t.Fatal("expected account")
+	}
+	if acc.ProxyID != "proxy-1" {
+		t.Fatalf("expected existing proxy assignment to remain, got %#v", acc)
+	}
+}
+
 func TestTestProxyUsesStoredProxy(t *testing.T) {
 	h := newAdminProxyTestHandler(t, `{
 		"proxies":[{"id":"proxy-1","name":"Node 1","type":"socks5h","host":"127.0.0.1","port":1080}]

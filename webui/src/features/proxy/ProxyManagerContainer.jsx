@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Play, Plus, Shield, Trash2, X } from 'lucide-react'
+import { Eye, EyeOff, Pencil, Play, Plus, Shield, Trash2, Users, X } from 'lucide-react'
 import clsx from 'clsx'
 
 import { useI18n } from '../../i18n'
@@ -79,9 +79,11 @@ function ProxiesTable({
     t,
     proxies,
     testing,
+    applyingAll,
     testResults,
     onCreate,
     onTest,
+    onApplyAll,
     onEdit,
     onDelete,
 }) {
@@ -138,7 +140,7 @@ function ProxiesTable({
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 self-start lg:self-auto">
+                                <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
                                     <button
                                         onClick={() => onTest(proxy)}
                                         disabled={testing[proxy.id]}
@@ -146,6 +148,15 @@ function ProxiesTable({
                                     >
                                         <Play className="w-3.5 h-3.5" />
                                         {t('proxyManager.testAction')}
+                                    </button>
+                                    <button
+                                        onClick={() => onApplyAll(proxy)}
+                                        disabled={applyingAll[proxy.id]}
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-border hover:bg-secondary transition-colors text-xs font-medium disabled:opacity-50"
+                                        title={t('proxyManager.applyAllTitle')}
+                                    >
+                                        <Users className="w-3.5 h-3.5" />
+                                        {applyingAll[proxy.id] ? t('proxyManager.applyingAll') : t('proxyManager.applyAllAction')}
                                     </button>
                                     <button
                                         onClick={() => onEdit(proxy)}
@@ -181,6 +192,8 @@ function ProxyFormModal({
     onClose,
     onSubmit,
 }) {
+    const [showPassword, setShowPassword] = useState(false)
+
     if (!show) {
         return null
     }
@@ -266,13 +279,24 @@ function ProxyFormModal({
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1.5">{t('proxyManager.passwordLabel')}</label>
-                            <input
-                                type="password"
-                                className="input-field bg-[#09090b]"
-                                placeholder={t('proxyManager.passwordPlaceholder')}
-                                value={form.password}
-                                onChange={e => setForm({ ...form, password: e.target.value })}
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    className="input-field bg-[#09090b] pr-10"
+                                    placeholder={t('proxyManager.passwordPlaceholder')}
+                                    value={form.password}
+                                    onChange={e => setForm({ ...form, password: e.target.value })}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(value => !value)}
+                                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition-colors"
+                                    title={t(showPassword ? 'actions.hidePassword' : 'actions.showPassword')}
+                                    aria-label={t(showPassword ? 'actions.hidePassword' : 'actions.showPassword')}
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
                             {isEditing && (
                                 <p className="mt-1 text-[11px] text-muted-foreground">{t('proxyManager.passwordKeepHint')}</p>
                             )}
@@ -315,6 +339,7 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
     const [form, setForm] = useState(createEmptyProxyForm())
     const [saving, setSaving] = useState(false)
     const [testing, setTesting] = useState({})
+    const [applyingAll, setApplyingAll] = useState({})
     const [testResults, setTestResults] = useState({})
 
     const proxies = config?.proxies || []
@@ -421,6 +446,25 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
         }
     }
 
+    const applyProxyToAll = async (proxy) => {
+        if (!confirm(t('proxyManager.applyAllConfirm', { name: proxy.name || `${proxy.host}:${proxy.port}` }))) return
+        setApplyingAll(prev => ({ ...prev, [proxy.id]: true }))
+        try {
+            const res = await apiFetch(`/admin/proxies/${encodeURIComponent(proxy.id)}/apply-all`, { method: 'PUT' })
+            const data = await readApiResponse(res, t('settings.nonJsonResponse', { status: res.status }))
+            if (!res.ok) {
+                onMessage('error', data.detail || t('messages.requestFailed'))
+                return
+            }
+            await onRefresh?.()
+            onMessage('success', t('proxyManager.applyAllSuccess', { count: data.updated ?? 0 }))
+        } catch (err) {
+            onMessage('error', err?.message || t('messages.networkError'))
+        } finally {
+            setApplyingAll(prev => ({ ...prev, [proxy.id]: false }))
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-3">
@@ -442,9 +486,11 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
                 t={t}
                 proxies={proxies}
                 testing={testing}
+                applyingAll={applyingAll}
                 testResults={testResults}
                 onCreate={openCreate}
                 onTest={testProxy}
+                onApplyAll={applyProxyToAll}
                 onEdit={openEdit}
                 onDelete={deleteProxy}
             />

@@ -59,7 +59,9 @@
         "generate": "Generate",
         "test": "Check account",
         "testing": "Checking...",
-        "loading": "Loading..."
+        "loading": "Loading...",
+        "showPassword": "Show password",
+        "hidePassword": "Hide password"
     },
     "messages": {
         "deleted": "Deleted successfully",
@@ -220,6 +222,11 @@
         "saving": "Saving...",
         "testing": "Testing",
         "testAction": "Check proxy",
+        "applyAllAction": "Apply to all",
+        "applyAllTitle": "Apply to all accounts",
+        "applyAllConfirm": "Apply proxy {name} to all accounts?",
+        "applyAllSuccess": "Applied to {count} accounts",
+        "applyingAll": "Applying...",
         "untested": "Untested",
         "saveAdd": "Add proxy",
         "saveEdit": "Save changes",

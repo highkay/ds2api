@@ -9,6 +9,7 @@ import (
 func RegisterRoutes(r chi.Router, h *Handler) {
 	r.Get("/proxies", h.listProxies)
 	r.Post("/proxies", h.addProxy)
+	r.Put("/proxies/{proxyID}/apply-all", h.applyProxyToAllAccounts)
 	r.Put("/proxies/{proxyID}", h.updateProxy)
 	r.Delete("/proxies/{proxyID}", h.deleteProxy)
 	r.Post("/proxies/test", h.testProxy)
@@ -21,4 +22,7 @@ func (h *Handler) DeleteProxy(w http.ResponseWriter, r *http.Request) { h.delete
 func (h *Handler) TestProxy(w http.ResponseWriter, r *http.Request)   { h.testProxy(w, r) }
 func (h *Handler) UpdateAccountProxy(w http.ResponseWriter, r *http.Request) {
 	h.updateAccountProxy(w, r)
+}
+func (h *Handler) ApplyProxyToAllAccounts(w http.ResponseWriter, r *http.Request) {
+	h.applyProxyToAllAccounts(w, r)
 }
